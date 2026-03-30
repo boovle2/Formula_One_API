@@ -2,11 +2,17 @@
 
 use App\Models\Driver;
 use App\Models\Team;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Hash;
+use Laravel\Sanctum\Sanctum;
 
 uses(RefreshDatabase::class);
 
 test('it can create and list teams', function () {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user, ['crud']);
+
     $createResponse = $this->postJson('/api/teams', [
         'name' => 'McLaren',
         'base_country' => 'United Kingdom',
@@ -26,6 +32,9 @@ test('it can create and list teams', function () {
 });
 
 test('it can create and update drivers', function () {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user, ['crud']);
+
     $team = Team::create([
         'name' => 'Ferrari',
         'base_country' => 'Italy',
@@ -59,6 +68,9 @@ test('it can create and update drivers', function () {
 });
 
 test('it can delete teams and drivers', function () {
+    $user = User::factory()->create();
+    Sanctum::actingAs($user, ['crud']);
+
     $team = Team::create([
         'name' => 'Red Bull Racing',
     ]);
@@ -78,4 +90,47 @@ test('it can delete teams and drivers', function () {
 
     $this->assertDatabaseMissing('drivers', ['id' => $driver->id]);
     $this->assertDatabaseMissing('teams', ['id' => $team->id]);
+});
+
+test('guest token has read-only permissions', function () {
+    Team::create([
+        'name' => 'Williams',
+        'base_country' => 'United Kingdom',
+        'team_principal' => 'James Vowles',
+    ]);
+
+    $tokenResponse = $this->postJson('/api/tokens/guest');
+
+    $tokenResponse
+        ->assertOk()
+        ->assertJsonPath('abilities.0', 'read');
+
+    $token = $tokenResponse->json('token');
+
+    $this->getJson('/api/teams', ['Authorization' => "Bearer {$token}"])
+        ->assertOk();
+
+    $this->postJson(
+        '/api/teams',
+        ['name' => 'Alpine'],
+        ['Authorization' => "Bearer {$token}"]
+    )->assertForbidden();
+});
+
+test('login returns crud token for valid user', function () {
+    $user = User::factory()->create([
+        'email' => 'admin@example.com',
+        'password' => Hash::make('password123'),
+    ]);
+
+    $response = $this->postJson('/api/login', [
+        'email' => $user->email,
+        'password' => 'password123',
+    ]);
+
+    $response
+        ->assertOk()
+        ->assertJsonPath('abilities.0', 'read')
+        ->assertJsonPath('abilities.1', 'crud')
+        ->assertJsonPath('user.email', $user->email);
 });
