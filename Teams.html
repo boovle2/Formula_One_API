@@ -14,10 +14,14 @@
         }
 
         body {
-            width: 50%;
-            max-width: 500px;
+            width: min(95vw, 1200px);
             margin: auto;
             margin-top: 50px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
         }
 
         th,
@@ -33,12 +37,31 @@
             padding-right: 0;
         }
 
+        .actions-cell {
+            display: flex;
+            justify-content: flex-end;
+            gap: 6px;
+            flex-wrap: wrap;
+            min-width: 210px;
+        }
+
         button {
-            margin-left: 6px;
+            margin-left: 0;
         }
 
         input {
+            width: 100%;
             max-width: 150px;
+        }
+
+        @media (max-width: 900px) {
+            body {
+                width: 98vw;
+            }
+
+            .actions-cell {
+                min-width: 170px;
+            }
         }
     </style>
 </head>
@@ -50,16 +73,21 @@
         <input id="crudEmail" type="email" placeholder="jij@mail.com">
         <label for="crudWachtwoord">Wachtwoord</label>
         <input id="crudWachtwoord" type="password" placeholder="wachtwoord">
+        <button type="button" onclick="loginMetUserToken()">Inloggen</button>
+        <button type="button" onclick="uitloggenUserToken()">Uitloggen</button>
     </div>
-    <table>
-        <tr>
-            <th>Name</th>
-            <th>Base Country</th>
-            <th>Team Principal</th>
-            <th></th>
-        </tr>
-        <tbody id="tabelInhoud"></tbody>
-    </table>
+    <p id="loginStatus" style="color: #333;"></p>
+    <div style="overflow-x: auto;">
+        <table>
+            <tr>
+                <th>Name</th>
+                <th>Base Country</th>
+                <th>Team Principal</th>
+                <th></th>
+            </tr>
+            <tbody id="tabelInhoud"></tbody>
+        </table>
+    </div>
     <p id="foutmelding" style="color: red;"></p>
 </body>
 <script>
@@ -72,6 +100,7 @@
     let teams = [];
     let editTeamId = null;
     let crudToken = null;
+    let heeftUserCrudToken = false;
 
     const getAuthHeaders = async () => {
         const tokenResponse = await axios.post(apiGuestToken);
@@ -86,7 +115,7 @@
     }
 
     const getCrudHeaders = async () => {
-        if (crudToken) {
+        if (crudToken && heeftUserCrudToken) {
             return {
                 headers: {
                     Authorization: `Bearer ${crudToken}`,
@@ -95,32 +124,73 @@
             };
         }
 
+        throw new Error("Log eerst in met een user token met CRUD-rechten.");
+    }
+
+    const updateLoginStatus = (tekst, kleur = "#333") => {
+        const status = document.getElementById("loginStatus");
+        status.style.color = kleur;
+        status.textContent = tekst;
+    }
+
+    const loginMetUserToken = async () => {
         const email = document.getElementById("crudEmail").value.trim();
         const password = document.getElementById("crudWachtwoord").value;
+        const foutmelding = document.getElementById("foutmelding");
 
         if (!email || !password) {
-            throw new Error("Vul eerst e-mail en wachtwoord in om te bewerken of verwijderen.");
+            updateLoginStatus("Vul e-mail en wachtwoord in.", "red");
+            return;
         }
 
-        const loginResponse = await axios.post(apiLogin, { email, password });
-        crudToken = loginResponse.data.token;
+        try {
+            const loginResponse = await axios.post(apiLogin, { email, password }, {
+                headers: { Accept: "application/json" },
+            });
 
-        return {
-            headers: {
-                Authorization: `Bearer ${crudToken}`,
-                Accept: "application/json",
-            },
-        };
+            const abilities = loginResponse.data.abilities || [];
+            const heeftCrud = abilities.includes("crud");
+
+            if (!heeftCrud) {
+                crudToken = null;
+                heeftUserCrudToken = false;
+                editTeamId = null;
+                renderTeams();
+                updateLoginStatus("Ingelogd zonder CRUD-rechten. Je kunt alleen lezen.", "red");
+                return;
+            }
+
+            crudToken = loginResponse.data.token;
+            heeftUserCrudToken = true;
+            foutmelding.textContent = "";
+            updateLoginStatus("Ingelogd met user token. Bewerken en verwijderen is beschikbaar.", "green");
+            renderTeams();
+        } catch (error) {
+            console.error(error);
+            crudToken = null;
+            heeftUserCrudToken = false;
+            editTeamId = null;
+            renderTeams();
+            updateLoginStatus("Inloggen mislukt. Controleer je gegevens.", "red");
+        }
+    }
+
+    const uitloggenUserToken = () => {
+        crudToken = null;
+        heeftUserCrudToken = false;
+        editTeamId = null;
+        renderTeams();
+        updateLoginStatus("Uitgelogd. Alleen lezen is beschikbaar.");
     }
 
     const maakTeamRij = (team) => {
-        if (team.id === editTeamId) {
+        if (heeftUserCrudToken && team.id === editTeamId) {
             return `
                 <tr>
                     <td><input id="edit-name-${team.id}" value="${team.name ?? ""}"></td>
                     <td><input id="edit-base-${team.id}" value="${team.base_country ?? ""}"></td>
                     <td><input id="edit-principal-${team.id}" value="${team.team_principal ?? ""}"></td>
-                    <td>
+                    <td class="actions-cell">
                         <button onclick="slaTeamOp(${team.id})">Opslaan</button>
                         <button onclick="verwijderTeam(${team.id})">Verwijder</button>
                         <button onclick="annuleerBewerken()">Annuleer</button>
@@ -133,7 +203,7 @@
                 <td>${team.name ?? ""}</td>
                 <td>${team.base_country ?? ""}</td>
                 <td>${team.team_principal ?? ""}</td>
-                <td><button onclick="startBewerken(${team.id})">Wijzig</button></td>
+                <td class="actions-cell">${heeftUserCrudToken ? `<button onclick="startBewerken(${team.id})">Wijzig</button>` : ""}</td>
             </tr>`;
     }
 
@@ -164,6 +234,11 @@
     }
 
     const startBewerken = (id) => {
+        if (!heeftUserCrudToken) {
+            document.getElementById("foutmelding").textContent = "Log eerst in met een user token met CRUD-rechten.";
+            return;
+        }
+
         editTeamId = id;
         document.getElementById("foutmelding").textContent = "";
         renderTeams();
@@ -208,6 +283,10 @@
             }
             if (error.response?.status === 401) {
                 crudToken = null;
+                heeftUserCrudToken = false;
+                editTeamId = null;
+                renderTeams();
+                updateLoginStatus("Sessie verlopen. Log opnieuw in.", "red");
                 foutmelding.textContent = "Inloggen mislukt of verlopen. Vul opnieuw e-mail en wachtwoord in.";
                 return;
             }
@@ -234,6 +313,10 @@
             console.error(error);
             if (error.response?.status === 401) {
                 crudToken = null;
+                heeftUserCrudToken = false;
+                editTeamId = null;
+                renderTeams();
+                updateLoginStatus("Sessie verlopen. Log opnieuw in.", "red");
                 foutmelding.textContent = "Inloggen mislukt of verlopen. Vul opnieuw e-mail en wachtwoord in.";
                 return;
             }
@@ -241,6 +324,8 @@
         }
     }
 
+    window.loginMetUserToken = loginMetUserToken;
+    window.uitloggenUserToken = uitloggenUserToken;
     window.startBewerken = startBewerken;
     window.annuleerBewerken = annuleerBewerken;
     window.slaTeamOp = slaTeamOp;
