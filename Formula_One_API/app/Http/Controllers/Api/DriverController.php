@@ -12,7 +12,7 @@ class DriverController extends Controller
 {
     public function index(): JsonResponse
     {
-        $drivers = Driver::with('team')->orderBy('number')->get();
+        $drivers = Driver::with('team')->orderBy('team_id')->get();
 
         return response()->json($drivers);
     }
