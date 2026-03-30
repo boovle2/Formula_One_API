@@ -1,0 +1,88 @@
+﻿<!DOCTYPE html>
+<html lang="nl">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Register</title>
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <style>
+        body {
+            max-width: 500px;
+            margin: 40px auto;
+            font-family: sans-serif;
+        }
+
+        form {
+            display: grid;
+            gap: 10px;
+        }
+
+        label {
+            font-weight: 600;
+        }
+
+        input {
+            padding: 8px;
+        }
+
+        button {
+            padding: 10px;
+            cursor: pointer;
+        }
+
+        #melding {
+            margin-top: 12px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Registreer</h1>
+    <form id="registerForm">
+        <label for="name">Naam</label>
+        <input id="name" type="text" required>
+        <label for="email">E-mail</label>
+        <input id="email" type="email" required>
+        <label for="password">Wachtwoord (minimaal 8 tekens)</label>
+        <input id="password" type="password" minlength="8" required>
+        <button type="submit">Account maken</button>
+    </form>
+    <p id="melding"></p>
+    <p><a href="HomePage.html">Terug naar home</a></p>
+    <script>
+        "use strict";
+        const apiBasis = "http://localhost:8000/api";
+        const apiRegister = apiBasis + "/register";
+        const form = document.getElementById("registerForm");
+        const melding = document.getElementById("melding");
+        form.addEventListener("submit", async (event) => {
+            event.preventDefault();
+            const payload = {
+                name: document.getElementById("name").value.trim(),
+                email: document.getElementById("email").value.trim(),
+                password: document.getElementById("password").value,
+            };
+            melding.textContent = "";
+            try {
+                const response = await axios.post(apiRegister, payload, {
+                    headers: { Accept: "application/json" }
+                });
+                const user = response.data.user;
+                melding.style.color = "green";
+                melding.textContent = `Registratie gelukt. Ingelogd als ${user.name} (${user.email}).`;
+                form.reset();
+            } catch (error) {
+                console.error(error);
+                melding.style.color = "red";
+                if (error.response?.status === 422) {
+                    melding.textContent = "Registratie mislukt: controleer je invoer of e-mail bestaat al.";
+                    return;
+                }
+                melding.textContent = "Registratie mislukt. Controleer of de API draait op http://localhost:8000.";
+            }
+        });
+    </script>
+</body>
+
+</html>

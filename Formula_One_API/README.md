@@ -7,6 +7,55 @@
 <a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
 </p>
 
+## Formula 1 API
+
+Deze API bevat CRUD endpoints voor Formula 1 teams en drivers, bedoeld om te gebruiken vanuit een aparte frontend-app (bijvoorbeeld React, Vue of Angular).
+
+### Endpoints
+
+- GET /api/teams
+- POST /api/teams
+- GET /api/teams/{id}
+- PUT /api/teams/{id}
+- DELETE /api/teams/{id}
+
+- GET /api/drivers
+- POST /api/drivers
+- GET /api/drivers/{id}
+- PUT /api/drivers/{id}
+- DELETE /api/drivers/{id}
+
+### Voorbeeld body team
+
+```json
+{
+	"name": "McLaren",
+	"base_country": "United Kingdom",
+	"team_principal": "Andrea Stella"
+}
+```
+
+### Voorbeeld body driver
+
+```json
+{
+	"team_id": 1,
+	"first_name": "Lando",
+	"last_name": "Norris",
+	"number": 4,
+	"nationality": "United Kingdom",
+	"date_of_birth": "1999-11-13"
+}
+```
+
+### CORS voor externe frontend
+
+Standaard staat CORS open via CORS_ALLOWED_ORIGINS=*. Voor productie kun je dit beperken, bijvoorbeeld:
+
+```env
+CORS_ALLOWED_ORIGINS=http://localhost:5173,https://jouw-frontend.nl
+```
+
 ## About Laravel
 
 Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
