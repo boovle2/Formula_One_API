@@ -69,12 +69,17 @@
 <body onload="laadTeams()">
     <h1>Teams api</h1>
     <div>
-        <label for="crudEmail">E-mail</label>
-        <input id="crudEmail" type="email" placeholder="jij@mail.com">
-        <label for="crudWachtwoord">Wachtwoord</label>
-        <input id="crudWachtwoord" type="password" placeholder="wachtwoord">
-        <button type="button" onclick="loginMetUserToken()">Inloggen</button>
+        <span id="loginVelden">
+            <label for="crudEmail">E-mail</label>
+            <input id="crudEmail" type="email" placeholder="jij@mail.com">
+            <label for="crudWachtwoord">Wachtwoord</label>
+            <input id="crudWachtwoord" type="password" placeholder="wachtwoord">
+            <button type="button" onclick="loginMetUserToken()">Inloggen user token</button>
+            <button type="button" onclick="loginMetGuestToken()">Gast token</button>
+        </span>
+        <span id="ingelogdeNaam" style="display: none; font-weight: 600;"></span>
         <button type="button" onclick="uitloggenUserToken()">Uitloggen</button>
+        <button type="button" onclick="startNieuwTeam()">Nieuw team</button>
     </div>
     <p id="loginStatus" style="color: #333;"></p>
     <div style="overflow-x: auto;">
@@ -96,15 +101,65 @@
     const apiTeams = apibasis + "/teams";
     const apiGuestToken = apibasis + "/tokens/guest";
     const apiLogin = apibasis + "/login";
+    const tokenKey = "f1_token";
+    const abilitiesKey = "f1_abilities";
+    const userNameKey = "f1_user_name";
 
     let teams = [];
     let editTeamId = null;
-    let crudToken = null;
-    let heeftUserCrudToken = false;
+    let nieuwTeamModus = false;
 
-    const getAuthHeaders = async () => {
-        const tokenResponse = await axios.post(apiGuestToken);
-        const token = tokenResponse.data.token;
+    const getToken = () => localStorage.getItem(tokenKey);
+
+    const getAbilities = () => {
+        try {
+            return JSON.parse(localStorage.getItem(abilitiesKey) || "[]");
+        } catch {
+            return [];
+        }
+    }
+
+    const getUserName = () => localStorage.getItem(userNameKey) || "";
+
+    const heeftUserCrudToken = () => getAbilities().includes("crud");
+
+    const saveAuth = (token, abilities, userName = "") => {
+        localStorage.setItem(tokenKey, token);
+        localStorage.setItem(abilitiesKey, JSON.stringify(abilities || []));
+        if (userName) {
+            localStorage.setItem(userNameKey, userName);
+        } else {
+            localStorage.removeItem(userNameKey);
+        }
+    }
+
+    const clearAuth = () => {
+        localStorage.removeItem(tokenKey);
+        localStorage.removeItem(abilitiesKey);
+        localStorage.removeItem(userNameKey);
+    }
+
+    const syncLoginUi = () => {
+        const loginVelden = document.getElementById("loginVelden");
+        const ingelogdeNaam = document.getElementById("ingelogdeNaam");
+
+        if (heeftUserCrudToken()) {
+            loginVelden.style.display = "none";
+            ingelogdeNaam.style.display = "inline";
+            ingelogdeNaam.textContent = `Ingelogd als: ${getUserName() || "User"}`;
+            return;
+        }
+
+        loginVelden.style.display = "inline";
+        ingelogdeNaam.style.display = "none";
+        ingelogdeNaam.textContent = "";
+    }
+
+    const getAuthHeaders = () => {
+        const token = getToken();
+        if (!token) {
+            throw new Error("Geen token gevonden. Log in of vraag een gast token aan.");
+        }
 
         return {
             headers: {
@@ -114,23 +169,44 @@
         };
     }
 
-    const getCrudHeaders = async () => {
-        if (crudToken && heeftUserCrudToken) {
-            return {
-                headers: {
-                    Authorization: `Bearer ${crudToken}`,
-                    Accept: "application/json",
-                },
-            };
+    const ensureLeesToken = async () => {
+        if (getToken()) {
+            return;
         }
 
-        throw new Error("Log eerst in met een user token met CRUD-rechten.");
+        const response = await axios.post(apiGuestToken, {}, { headers: { Accept: "application/json" } });
+        saveAuth(response.data.token, response.data.abilities || ["read"]);
+    }
+
+    const getCrudHeaders = () => {
+        if (!heeftUserCrudToken()) {
+            throw new Error("Log eerst in met een user token met CRUD-rechten.");
+        }
+
+        return getAuthHeaders();
     }
 
     const updateLoginStatus = (tekst, kleur = "#333") => {
         const status = document.getElementById("loginStatus");
         status.style.color = kleur;
         status.textContent = tekst;
+    }
+
+    const syncLoginStatus = () => {
+        if (!getToken()) {
+            updateLoginStatus("Niet ingelogd. Alleen lezen met gast token.");
+            syncLoginUi();
+            return;
+        }
+
+        if (heeftUserCrudToken()) {
+            updateLoginStatus("Ingelogd met user token. Bewerken en verwijderen is beschikbaar.", "green");
+            syncLoginUi();
+            return;
+        }
+
+        updateLoginStatus("Ingelogd met gast/read token. Alleen lezen is beschikbaar.");
+        syncLoginUi();
     }
 
     const loginMetUserToken = async () => {
@@ -148,43 +224,51 @@
                 headers: { Accept: "application/json" },
             });
 
-            const abilities = loginResponse.data.abilities || [];
-            const heeftCrud = abilities.includes("crud");
-
-            if (!heeftCrud) {
-                crudToken = null;
-                heeftUserCrudToken = false;
-                editTeamId = null;
-                renderTeams();
-                updateLoginStatus("Ingelogd zonder CRUD-rechten. Je kunt alleen lezen.", "red");
-                return;
-            }
-
-            crudToken = loginResponse.data.token;
-            heeftUserCrudToken = true;
+            saveAuth(
+                loginResponse.data.token,
+                loginResponse.data.abilities || [],
+                loginResponse.data.user?.name || ""
+            );
             foutmelding.textContent = "";
-            updateLoginStatus("Ingelogd met user token. Bewerken en verwijderen is beschikbaar.", "green");
+            syncLoginStatus();
             renderTeams();
         } catch (error) {
             console.error(error);
-            crudToken = null;
-            heeftUserCrudToken = false;
+            clearAuth();
             editTeamId = null;
+            nieuwTeamModus = false;
             renderTeams();
             updateLoginStatus("Inloggen mislukt. Controleer je gegevens.", "red");
         }
     }
 
+    const loginMetGuestToken = async () => {
+        const foutmelding = document.getElementById("foutmelding");
+
+        try {
+            const response = await axios.post(apiGuestToken, {}, { headers: { Accept: "application/json" } });
+            saveAuth(response.data.token, response.data.abilities || ["read"]);
+            editTeamId = null;
+            nieuwTeamModus = false;
+            foutmelding.textContent = "";
+            syncLoginStatus();
+            renderTeams();
+        } catch (error) {
+            console.error(error);
+            updateLoginStatus("Gast token ophalen mislukt.", "red");
+        }
+    }
+
     const uitloggenUserToken = () => {
-        crudToken = null;
-        heeftUserCrudToken = false;
+        clearAuth();
         editTeamId = null;
+        nieuwTeamModus = false;
         renderTeams();
-        updateLoginStatus("Uitgelogd. Alleen lezen is beschikbaar.");
+        syncLoginStatus();
     }
 
     const maakTeamRij = (team) => {
-        if (heeftUserCrudToken && team.id === editTeamId) {
+        if (heeftUserCrudToken() && team.id === editTeamId) {
             return `
                 <tr>
                     <td><input id="edit-name-${team.id}" value="${team.name ?? ""}"></td>
@@ -203,13 +287,30 @@
                 <td>${team.name ?? ""}</td>
                 <td>${team.base_country ?? ""}</td>
                 <td>${team.team_principal ?? ""}</td>
-                <td class="actions-cell">${heeftUserCrudToken ? `<button onclick="startBewerken(${team.id})">Wijzig</button>` : ""}</td>
+                <td class="actions-cell">${heeftUserCrudToken() ? `<button onclick="startBewerken(${team.id})">Wijzig</button>` : ""}</td>
+            </tr>`;
+    }
+
+    const maakNieuwTeamRij = () => {
+        if (!heeftUserCrudToken() || !nieuwTeamModus) {
+            return "";
+        }
+
+        return `
+            <tr>
+                <td><input id="nieuw-name" placeholder="Name"></td>
+                <td><input id="nieuw-base" placeholder="Base country"></td>
+                <td><input id="nieuw-principal" placeholder="Team principal"></td>
+                <td class="actions-cell">
+                    <button onclick="maakTeamAan()">Aanmaken</button>
+                    <button onclick="annuleerNieuwTeam()">Annuleer</button>
+                </td>
             </tr>`;
     }
 
     const renderTeams = () => {
         const tabelInhoud = document.getElementById("tabelInhoud");
-        tabelInhoud.innerHTML = teams.map(maakTeamRij).join("");
+        tabelInhoud.innerHTML = `${maakNieuwTeamRij()}${teams.map(maakTeamRij).join("")}`;
     }
 
     const laadTeams = async () => {
@@ -217,6 +318,7 @@
         const foutmelding = document.getElementById("foutmelding");
 
         try {
+            await ensureLeesToken();
             const authConfig = await getAuthHeaders();
             const response = await axios.get(apiTeams, authConfig);
             const json = response.data;
@@ -227,18 +329,23 @@
             foutmelding.textContent = "";
 
             renderTeams();
+            syncLoginStatus();
         } catch (error) {
             console.error(error);
+            if (error.response?.status === 401) {
+                clearAuth();
+            }
             foutmelding.textContent = "Kon teams niet laden. Controleer of de API draait op http://localhost:8000.";
         }
     }
 
     const startBewerken = (id) => {
-        if (!heeftUserCrudToken) {
+        if (!heeftUserCrudToken()) {
             document.getElementById("foutmelding").textContent = "Log eerst in met een user token met CRUD-rechten.";
             return;
         }
 
+        nieuwTeamModus = false;
         editTeamId = id;
         document.getElementById("foutmelding").textContent = "";
         renderTeams();
@@ -248,6 +355,63 @@
         editTeamId = null;
         document.getElementById("foutmelding").textContent = "";
         renderTeams();
+    }
+
+    const startNieuwTeam = () => {
+        if (!heeftUserCrudToken()) {
+            document.getElementById("foutmelding").textContent = "Log eerst in met een user token met CRUD-rechten.";
+            return;
+        }
+
+        editTeamId = null;
+        nieuwTeamModus = true;
+        document.getElementById("foutmelding").textContent = "";
+        renderTeams();
+    }
+
+    const annuleerNieuwTeam = () => {
+        nieuwTeamModus = false;
+        document.getElementById("foutmelding").textContent = "";
+        renderTeams();
+    }
+
+    const maakTeamAan = async () => {
+        const foutmelding = document.getElementById("foutmelding");
+
+        try {
+            const payload = {
+                name: document.getElementById("nieuw-name").value.trim(),
+                base_country: document.getElementById("nieuw-base").value.trim() || null,
+                team_principal: document.getElementById("nieuw-principal").value.trim() || null,
+            };
+
+            if (!payload.name) {
+                throw new Error("Naam is verplicht.");
+            }
+
+            const crudConfig = await getCrudHeaders();
+            const response = await axios.post(apiTeams, payload, crudConfig);
+            teams.unshift(response.data);
+            nieuwTeamModus = false;
+            foutmelding.textContent = "";
+            renderTeams();
+        } catch (error) {
+            console.error(error);
+            if (error.response?.status === 422) {
+                foutmelding.textContent = "Validatie mislukt. Controleer de invoer.";
+                return;
+            }
+            if (error.response?.status === 401) {
+                clearAuth();
+                editTeamId = null;
+                nieuwTeamModus = false;
+                renderTeams();
+                syncLoginStatus();
+                foutmelding.textContent = "Inloggen mislukt of verlopen. Vul opnieuw e-mail en wachtwoord in.";
+                return;
+            }
+            foutmelding.textContent = error.message || "Team aanmaken is mislukt.";
+        }
     }
 
     const slaTeamOp = async (id) => {
@@ -282,11 +446,10 @@
                 return;
             }
             if (error.response?.status === 401) {
-                crudToken = null;
-                heeftUserCrudToken = false;
+                clearAuth();
                 editTeamId = null;
                 renderTeams();
-                updateLoginStatus("Sessie verlopen. Log opnieuw in.", "red");
+                syncLoginStatus();
                 foutmelding.textContent = "Inloggen mislukt of verlopen. Vul opnieuw e-mail en wachtwoord in.";
                 return;
             }
@@ -312,11 +475,10 @@
         } catch (error) {
             console.error(error);
             if (error.response?.status === 401) {
-                crudToken = null;
-                heeftUserCrudToken = false;
+                clearAuth();
                 editTeamId = null;
                 renderTeams();
-                updateLoginStatus("Sessie verlopen. Log opnieuw in.", "red");
+                syncLoginStatus();
                 foutmelding.textContent = "Inloggen mislukt of verlopen. Vul opnieuw e-mail en wachtwoord in.";
                 return;
             }
@@ -325,7 +487,11 @@
     }
 
     window.loginMetUserToken = loginMetUserToken;
+    window.loginMetGuestToken = loginMetGuestToken;
     window.uitloggenUserToken = uitloggenUserToken;
+    window.startNieuwTeam = startNieuwTeam;
+    window.annuleerNieuwTeam = annuleerNieuwTeam;
+    window.maakTeamAan = maakTeamAan;
     window.startBewerken = startBewerken;
     window.annuleerBewerken = annuleerBewerken;
     window.slaTeamOp = slaTeamOp;
