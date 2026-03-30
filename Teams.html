@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 
 <head>
@@ -6,10 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Formula 1 API Frontend</title>
     <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
-
     <style>
-        div,
-        footer {
+        div {
             margin-top: 20px;
         }
 
@@ -75,7 +73,6 @@
             <label for="crudWachtwoord">Wachtwoord</label>
             <input id="crudWachtwoord" type="password" placeholder="wachtwoord">
             <button type="button" onclick="loginMetUserToken()">Inloggen user token</button>
-            <button type="button" onclick="loginMetGuestToken()">Gast token</button>
         </span>
         <span id="ingelogdeNaam" style="display: none; font-weight: 600;"></span>
         <button type="button" onclick="uitloggenUserToken()">Uitloggen</button>
@@ -104,13 +101,10 @@
     const tokenKey = "f1_token";
     const abilitiesKey = "f1_abilities";
     const userNameKey = "f1_user_name";
-
     let teams = [];
     let editTeamId = null;
     let nieuwTeamModus = false;
-
     const getToken = () => localStorage.getItem(tokenKey);
-
     const getAbilities = () => {
         try {
             return JSON.parse(localStorage.getItem(abilitiesKey) || "[]");
@@ -118,11 +112,8 @@
             return [];
         }
     }
-
     const getUserName = () => localStorage.getItem(userNameKey) || "";
-
     const heeftUserCrudToken = () => getAbilities().includes("crud");
-
     const saveAuth = (token, abilities, userName = "") => {
         localStorage.setItem(tokenKey, token);
         localStorage.setItem(abilitiesKey, JSON.stringify(abilities || []));
@@ -132,35 +123,29 @@
             localStorage.removeItem(userNameKey);
         }
     }
-
     const clearAuth = () => {
         localStorage.removeItem(tokenKey);
         localStorage.removeItem(abilitiesKey);
         localStorage.removeItem(userNameKey);
     }
-
     const syncLoginUi = () => {
         const loginVelden = document.getElementById("loginVelden");
         const ingelogdeNaam = document.getElementById("ingelogdeNaam");
-
         if (heeftUserCrudToken()) {
             loginVelden.style.display = "none";
             ingelogdeNaam.style.display = "inline";
             ingelogdeNaam.textContent = `Ingelogd als: ${getUserName() || "User"}`;
             return;
         }
-
         loginVelden.style.display = "inline";
         ingelogdeNaam.style.display = "none";
         ingelogdeNaam.textContent = "";
     }
-
     const getAuthHeaders = () => {
         const token = getToken();
         if (!token) {
             throw new Error("Geen token gevonden. Log in of vraag een gast token aan.");
         }
-
         return {
             headers: {
                 Authorization: `Bearer ${token}`,
@@ -168,62 +153,50 @@
             },
         };
     }
-
     const ensureLeesToken = async () => {
         if (getToken()) {
             return;
         }
-
         const response = await axios.post(apiGuestToken, {}, { headers: { Accept: "application/json" } });
         saveAuth(response.data.token, response.data.abilities || ["read"]);
     }
-
     const getCrudHeaders = () => {
         if (!heeftUserCrudToken()) {
             throw new Error("Log eerst in met een user token met CRUD-rechten.");
         }
-
         return getAuthHeaders();
     }
-
     const updateLoginStatus = (tekst, kleur = "#333") => {
         const status = document.getElementById("loginStatus");
         status.style.color = kleur;
         status.textContent = tekst;
     }
-
     const syncLoginStatus = () => {
         if (!getToken()) {
             updateLoginStatus("Niet ingelogd. Alleen lezen met gast token.");
             syncLoginUi();
             return;
         }
-
         if (heeftUserCrudToken()) {
             updateLoginStatus("Ingelogd met user token. Bewerken en verwijderen is beschikbaar.", "green");
             syncLoginUi();
             return;
         }
-
         updateLoginStatus("Ingelogd met gast/read token. Alleen lezen is beschikbaar.");
         syncLoginUi();
     }
-
     const loginMetUserToken = async () => {
         const email = document.getElementById("crudEmail").value.trim();
         const password = document.getElementById("crudWachtwoord").value;
         const foutmelding = document.getElementById("foutmelding");
-
         if (!email || !password) {
             updateLoginStatus("Vul e-mail en wachtwoord in.", "red");
             return;
         }
-
         try {
             const loginResponse = await axios.post(apiLogin, { email, password }, {
                 headers: { Accept: "application/json" },
             });
-
             saveAuth(
                 loginResponse.data.token,
                 loginResponse.data.abilities || [],
@@ -241,10 +214,8 @@
             updateLoginStatus("Inloggen mislukt. Controleer je gegevens.", "red");
         }
     }
-
     const loginMetGuestToken = async () => {
         const foutmelding = document.getElementById("foutmelding");
-
         try {
             const response = await axios.post(apiGuestToken, {}, { headers: { Accept: "application/json" } });
             saveAuth(response.data.token, response.data.abilities || ["read"]);
@@ -258,76 +229,64 @@
             updateLoginStatus("Gast token ophalen mislukt.", "red");
         }
     }
-
-    const uitloggenUserToken = () => {
+    const uitloggenUserToken = async () => {
+        crudEmail.value = "";
+        crudWachtwoord.value = "";
         clearAuth();
         editTeamId = null;
         nieuwTeamModus = false;
-        renderTeams();
-        syncLoginStatus();
+        await loginMetGuestToken();
     }
-
     const maakTeamRij = (team) => {
         if (heeftUserCrudToken() && team.id === editTeamId) {
             return `
-                <tr>
-                    <td><input id="edit-name-${team.id}" value="${team.name ?? ""}"></td>
-                    <td><input id="edit-base-${team.id}" value="${team.base_country ?? ""}"></td>
-                    <td><input id="edit-principal-${team.id}" value="${team.team_principal ?? ""}"></td>
-                    <td class="actions-cell">
-                        <button onclick="slaTeamOp(${team.id})">Opslaan</button>
-                        <button onclick="verwijderTeam(${team.id})">Verwijder</button>
-                        <button onclick="annuleerBewerken()">Annuleer</button>
-                    </td>
-                </tr>`;
+<tr>
+<td><input id="edit-name-${team.id}" value="${team.name ?? ""}"></td>
+<td><input id="edit-base-${team.id}" value="${team.base_country ?? ""}"></td>
+<td><input id="edit-principal-${team.id}" value="${team.team_principal ?? ""}"></td>
+<td class="actions-cell">
+<button onclick="slaTeamOp(${team.id})">Opslaan</button>
+<button onclick="verwijderTeam(${team.id})">Verwijder</button>
+<button onclick="annuleerBewerken()">Annuleer</button>
+</td>
+</tr>`;
         }
-
         return `
-            <tr>
-                <td>${team.name ?? ""}</td>
-                <td>${team.base_country ?? ""}</td>
-                <td>${team.team_principal ?? ""}</td>
-                <td class="actions-cell">${heeftUserCrudToken() ? `<button onclick="startBewerken(${team.id})">Wijzig</button>` : ""}</td>
-            </tr>`;
+<tr>
+<td>${team.name ?? ""}</td>
+<td>${team.base_country ?? ""}</td>
+<td>${team.team_principal ?? ""}</td>
+<td class="actions-cell">${heeftUserCrudToken() ? `<button onclick="startBewerken(${team.id})">Wijzig</button>` : ""}</td>
+</tr>`;
     }
-
     const maakNieuwTeamRij = () => {
         if (!heeftUserCrudToken() || !nieuwTeamModus) {
             return "";
         }
-
         return `
-            <tr>
-                <td><input id="nieuw-name" placeholder="Name"></td>
-                <td><input id="nieuw-base" placeholder="Base country"></td>
-                <td><input id="nieuw-principal" placeholder="Team principal"></td>
-                <td class="actions-cell">
-                    <button onclick="maakTeamAan()">Aanmaken</button>
-                    <button onclick="annuleerNieuwTeam()">Annuleer</button>
-                </td>
-            </tr>`;
+<tr>
+<td><input id="nieuw-name" placeholder="Name"></td>
+<td><input id="nieuw-base" placeholder="Base country"></td>
+<td><input id="nieuw-principal" placeholder="Team principal"></td>
+<td class="actions-cell">
+<button onclick="maakTeamAan()">Aanmaken</button>
+<button onclick="annuleerNieuwTeam()">Annuleer</button>
+</td>
+</tr>`;
     }
-
     const renderTeams = () => {
         const tabelInhoud = document.getElementById("tabelInhoud");
         tabelInhoud.innerHTML = `${maakNieuwTeamRij()}${teams.map(maakTeamRij).join("")}`;
     }
-
     const laadTeams = async () => {
-        const tabelInhoud = document.getElementById("tabelInhoud");
         const foutmelding = document.getElementById("foutmelding");
-
         try {
             await ensureLeesToken();
             const authConfig = await getAuthHeaders();
             const response = await axios.get(apiTeams, authConfig);
-            const json = response.data;
-
-            teams = json;
+            teams = response.data;
             editTeamId = null;
-            tabelInhoud.innerHTML = "";
             foutmelding.textContent = "";
-
             renderTeams();
             syncLoginStatus();
         } catch (error) {
@@ -338,57 +297,47 @@
             foutmelding.textContent = "Kon teams niet laden. Controleer of de API draait op http://localhost:8000.";
         }
     }
-
     const startBewerken = (id) => {
         if (!heeftUserCrudToken()) {
             document.getElementById("foutmelding").textContent = "Log eerst in met een user token met CRUD-rechten.";
             return;
         }
-
         nieuwTeamModus = false;
         editTeamId = id;
         document.getElementById("foutmelding").textContent = "";
         renderTeams();
     }
-
     const annuleerBewerken = () => {
         editTeamId = null;
         document.getElementById("foutmelding").textContent = "";
         renderTeams();
     }
-
     const startNieuwTeam = () => {
         if (!heeftUserCrudToken()) {
             document.getElementById("foutmelding").textContent = "Log eerst in met een user token met CRUD-rechten.";
             return;
         }
-
         editTeamId = null;
         nieuwTeamModus = true;
         document.getElementById("foutmelding").textContent = "";
         renderTeams();
     }
-
     const annuleerNieuwTeam = () => {
         nieuwTeamModus = false;
         document.getElementById("foutmelding").textContent = "";
         renderTeams();
     }
-
     const maakTeamAan = async () => {
         const foutmelding = document.getElementById("foutmelding");
-
         try {
             const payload = {
                 name: document.getElementById("nieuw-name").value.trim(),
                 base_country: document.getElementById("nieuw-base").value.trim() || null,
                 team_principal: document.getElementById("nieuw-principal").value.trim() || null,
             };
-
             if (!payload.name) {
                 throw new Error("Naam is verplicht.");
             }
-
             const crudConfig = await getCrudHeaders();
             const response = await axios.post(apiTeams, payload, crudConfig);
             teams.unshift(response.data);
@@ -413,29 +362,23 @@
             foutmelding.textContent = error.message || "Team aanmaken is mislukt.";
         }
     }
-
     const slaTeamOp = async (id) => {
         const foutmelding = document.getElementById("foutmelding");
-
         try {
             const payload = {
                 name: document.getElementById(`edit-name-${id}`).value.trim(),
                 base_country: document.getElementById(`edit-base-${id}`).value.trim() || null,
                 team_principal: document.getElementById(`edit-principal-${id}`).value.trim() || null,
             };
-
             if (!payload.name) {
                 throw new Error("Naam is verplicht.");
             }
-
             const crudConfig = await getCrudHeaders();
             const response = await axios.put(`${apiTeams}/${id}`, payload, crudConfig);
             const index = teams.findIndex(team => team.id === id);
-
             if (index >= 0) {
                 teams[index] = response.data;
             }
-
             editTeamId = null;
             foutmelding.textContent = "";
             renderTeams();
@@ -456,18 +399,14 @@
             foutmelding.textContent = error.message || "Team opslaan is mislukt.";
         }
     }
-
     const verwijderTeam = async (id) => {
         const foutmelding = document.getElementById("foutmelding");
-
         if (!confirm("Weet je zeker dat je dit team wilt verwijderen?")) {
             return;
         }
-
         try {
             const crudConfig = await getCrudHeaders();
             await axios.delete(`${apiTeams}/${id}`, crudConfig);
-
             teams = teams.filter(team => team.id !== id);
             editTeamId = null;
             foutmelding.textContent = "";
@@ -485,7 +424,6 @@
             foutmelding.textContent = "Team verwijderen is mislukt.";
         }
     }
-
     window.loginMetUserToken = loginMetUserToken;
     window.loginMetGuestToken = loginMetGuestToken;
     window.uitloggenUserToken = uitloggenUserToken;

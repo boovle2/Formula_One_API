@@ -1,40 +1,39 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Formula 1 API Frontend</title>
     <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
-
     <style>
-        div,
-		footer {
-			margin-top: 20px;
-		}
+        div {
+            margin-top: 20px;
+        }
 
-		body {
+        body {
             width: min(95vw, 1200px);
-			margin: auto;
-			margin-top: 50px;
-		}
+            margin: auto;
+            margin-top: 50px;
+        }
 
         table {
             width: 100%;
             border-collapse: collapse;
         }
 
-		th,
-		td {
-			text-align: left;
-			padding-right: 10px;
+        th,
+        td {
+            text-align: left;
+            padding-right: 10px;
             white-space: nowrap;
-		}
+        }
 
-		th:last-child,
-		td:last-child {
-			text-align: right;
-			padding-right: 0;
-		}
+        th:last-child,
+        td:last-child {
+            text-align: right;
+            padding-right: 0;
+        }
 
         .actions-cell {
             display: flex;
@@ -64,8 +63,9 @@
         }
     </style>
 </head>
+
 <body onload="laadDrivers()">
-	<h1>Drivers api</h1>
+    <h1>Drivers api</h1>
     <div>
         <span id="loginVelden">
             <label for="crudEmail">E-mail</label>
@@ -73,28 +73,27 @@
             <label for="crudWachtwoord">Wachtwoord</label>
             <input id="crudWachtwoord" type="password" placeholder="wachtwoord">
             <button type="button" onclick="loginMetUserToken()">Inloggen user token</button>
-            <button type="button" onclick="loginMetGuestToken()">Gast token</button>
         </span>
         <span id="ingelogdeNaam" style="display: none; font-weight: 600;"></span>
         <button type="button" onclick="uitloggenUserToken()">Uitloggen</button>
         <button type="button" onclick="startNieuweDriver()">Nieuwe driver</button>
     </div>
-	<p id="loginStatus" style="color: #333;"></p>
+    <p id="loginStatus" style="color: #333;"></p>
     <div style="overflow-x: auto;">
-    <table>
-        <tr>
-            <th>First Name</th>
-            <th>Last Name</th>
-            <th>Number</th>
-            <th>Nationality</th>
-            <th>Date of Birth</th>
-			<th>Team</th>
-			<th></th>
-		</tr>
-		<tbody id="tabelInhoud"></tbody>
-	</table>
+        <table>
+            <tr>
+                <th>First Name</th>
+                <th>Last Name</th>
+                <th>Number</th>
+                <th>Nationality</th>
+                <th>Date of Birth</th>
+                <th>Team</th>
+                <th></th>
+            </tr>
+            <tbody id="tabelInhoud"></tbody>
+        </table>
     </div>
-	<p id="foutmelding" style="color: red;"></p>
+    <p id="foutmelding" style="color: red;"></p>
 </body>
 <script>
     "use strict";
@@ -105,13 +104,10 @@
     const tokenKey = "f1_token";
     const abilitiesKey = "f1_abilities";
     const userNameKey = "f1_user_name";
-
     let drivers = [];
     let editDriverId = null;
     let nieuwDriverModus = false;
-
     const getToken = () => localStorage.getItem(tokenKey);
-
     const getAbilities = () => {
         try {
             return JSON.parse(localStorage.getItem(abilitiesKey) || "[]");
@@ -119,11 +115,8 @@
             return [];
         }
     }
-
     const getUserName = () => localStorage.getItem(userNameKey) || "";
-
     const heeftUserCrudToken = () => getAbilities().includes("crud");
-
     const saveAuth = (token, abilities, userName = "") => {
         localStorage.setItem(tokenKey, token);
         localStorage.setItem(abilitiesKey, JSON.stringify(abilities || []));
@@ -133,35 +126,29 @@
             localStorage.removeItem(userNameKey);
         }
     }
-
     const clearAuth = () => {
         localStorage.removeItem(tokenKey);
         localStorage.removeItem(abilitiesKey);
         localStorage.removeItem(userNameKey);
     }
-
     const syncLoginUi = () => {
         const loginVelden = document.getElementById("loginVelden");
         const ingelogdeNaam = document.getElementById("ingelogdeNaam");
-
         if (heeftUserCrudToken()) {
             loginVelden.style.display = "none";
             ingelogdeNaam.style.display = "inline";
             ingelogdeNaam.textContent = `Ingelogd als: ${getUserName() || "User"}`;
             return;
         }
-
         loginVelden.style.display = "inline";
         ingelogdeNaam.style.display = "none";
         ingelogdeNaam.textContent = "";
     }
-
     const getAuthHeaders = () => {
         const token = getToken();
         if (!token) {
             throw new Error("Geen token gevonden. Log in of vraag een gast token aan.");
         }
-
         return {
             headers: {
                 Authorization: `Bearer ${token}`,
@@ -169,62 +156,50 @@
             },
         };
     }
-
     const ensureLeesToken = async () => {
         if (getToken()) {
             return;
         }
-
         const response = await axios.post(apiGuestToken, {}, { headers: { Accept: "application/json" } });
         saveAuth(response.data.token, response.data.abilities || ["read"]);
     }
-
     const getCrudHeaders = () => {
         if (!heeftUserCrudToken()) {
             throw new Error("Log eerst in met een user token met CRUD-rechten.");
         }
-
         return getAuthHeaders();
     }
-
     const updateLoginStatus = (tekst, kleur = "#333") => {
         const status = document.getElementById("loginStatus");
         status.style.color = kleur;
         status.textContent = tekst;
     }
-
     const syncLoginStatus = () => {
         if (!getToken()) {
             updateLoginStatus("Niet ingelogd. Alleen lezen met gast token.");
             syncLoginUi();
             return;
         }
-
         if (heeftUserCrudToken()) {
             updateLoginStatus("Ingelogd met user token. Bewerken en verwijderen is beschikbaar.", "green");
             syncLoginUi();
             return;
         }
-
         updateLoginStatus("Ingelogd met gast/read token. Alleen lezen is beschikbaar.");
         syncLoginUi();
     }
-
     const loginMetUserToken = async () => {
         const email = document.getElementById("crudEmail").value.trim();
         const password = document.getElementById("crudWachtwoord").value;
         const foutmelding = document.getElementById("foutmelding");
-
         if (!email || !password) {
             updateLoginStatus("Vul e-mail en wachtwoord in.", "red");
             return;
         }
-
         try {
             const loginResponse = await axios.post(apiLogin, { email, password }, {
                 headers: { Accept: "application/json" },
             });
-
             saveAuth(
                 loginResponse.data.token,
                 loginResponse.data.abilities || [],
@@ -242,10 +217,8 @@
             updateLoginStatus("Inloggen mislukt. Controleer je gegevens.", "red");
         }
     }
-
     const loginMetGuestToken = async () => {
         const foutmelding = document.getElementById("foutmelding");
-
         try {
             const response = await axios.post(apiGuestToken, {}, { headers: { Accept: "application/json" } });
             saveAuth(response.data.token, response.data.abilities || ["read"]);
@@ -259,93 +232,79 @@
             updateLoginStatus("Gast token ophalen mislukt.", "red");
         }
     }
-
-    const uitloggenUserToken = () => {
+    const uitloggenUserToken = async () => {
+        crudEmail.value = "";
+        crudWachtwoord.value = "";
         clearAuth();
         editDriverId = null;
         nieuwDriverModus = false;
-        renderDrivers();
-        syncLoginStatus();
+        await loginMetGuestToken();
     }
-
     const dateNaarInput = (value) => {
         if (!value) {
             return "";
         }
-
         return String(value).slice(0, 10);
     }
-
     const maakNieuweDriverRij = () => {
         if (!heeftUserCrudToken() || !nieuwDriverModus) {
             return "";
         }
-
         return `
-            <tr>
-                <td><input id="nieuw-first" placeholder="First name"></td>
-                <td><input id="nieuw-last" placeholder="Last name"></td>
-                <td><input id="nieuw-number" type="number" min="1" max="99" placeholder="Number"></td>
-                <td><input id="nieuw-nationality" placeholder="Nationality"></td>
-                <td><input id="nieuw-dob" type="date"></td>
-                <td><input id="nieuw-team" type="number" min="1" placeholder="team id"></td>
-                <td class="actions-cell">
-                    <button onclick="maakDriverAan()">Aanmaken</button>
-                    <button onclick="annuleerNieuweDriver()">Annuleer</button>
-                </td>
-            </tr>`;
+<tr>
+<td><input id="nieuw-first" placeholder="First name"></td>
+<td><input id="nieuw-last" placeholder="Last name"></td>
+<td><input id="nieuw-number" type="number" min="1" max="99" placeholder="Number"></td>
+<td><input id="nieuw-nationality" placeholder="Nationality"></td>
+<td><input id="nieuw-dob" type="date"></td>
+<td><input id="nieuw-team" type="number" min="1" placeholder="team id"></td>
+<td class="actions-cell">
+<button onclick="maakDriverAan()">Aanmaken</button>
+<button onclick="annuleerNieuweDriver()">Annuleer</button>
+</td>
+</tr>`;
     }
-
     const maakDriverRij = (driver) => {
         if (heeftUserCrudToken() && driver.id === editDriverId) {
             return `
-                <tr>
-                    <td><input id="edit-first-${driver.id}" value="${driver.first_name ?? ""}"></td>
-                    <td><input id="edit-last-${driver.id}" value="${driver.last_name ?? ""}"></td>
-                    <td><input id="edit-number-${driver.id}" type="number" min="1" max="99" value="${driver.number ?? ""}"></td>
-                    <td><input id="edit-nationality-${driver.id}" value="${driver.nationality ?? ""}"></td>
-                    <td><input id="edit-dob-${driver.id}" type="date" value="${dateNaarInput(driver.date_of_birth)}"></td>
-                    <td><input id="edit-team-${driver.id}" type="number" min="1" value="${driver.team_id ?? ""}" placeholder="team id"></td>
-                    <td class="actions-cell">
-                        <button onclick="slaDriverOp(${driver.id})">Opslaan</button>
-                        <button onclick="verwijderDriver(${driver.id})">Verwijder</button>
-                        <button onclick="annuleerBewerken()">Annuleer</button>
-                    </td>
-                </tr>`;
+<tr>
+<td><input id="edit-first-${driver.id}" value="${driver.first_name ?? ""}"></td>
+<td><input id="edit-last-${driver.id}" value="${driver.last_name ?? ""}"></td>
+<td><input id="edit-number-${driver.id}" type="number" min="1" max="99" value="${driver.number ?? ""}"></td>
+<td><input id="edit-nationality-${driver.id}" value="${driver.nationality ?? ""}"></td>
+<td><input id="edit-dob-${driver.id}" type="date" value="${dateNaarInput(driver.date_of_birth)}"></td>
+<td><input id="edit-team-${driver.id}" type="number" min="1" value="${driver.team_id ?? ""}" placeholder="team id"></td>
+<td class="actions-cell">
+<button onclick="slaDriverOp(${driver.id})">Opslaan</button>
+<button onclick="verwijderDriver(${driver.id})">Verwijder</button>
+<button onclick="annuleerBewerken()">Annuleer</button>
+</td>
+</tr>`;
         }
-
         return `
-            <tr>
-                <td>${driver.first_name ?? ""}</td>
-                <td>${driver.last_name ?? ""}</td>
-                <td>${driver.number ?? ""}</td>
-                <td>${driver.nationality ?? ""}</td>
-                <td>${dateNaarInput(driver.date_of_birth)}</td>
-                <td>${driver.team?.name ?? (driver.team_id ?? "")}</td>
-                <td class="actions-cell">${heeftUserCrudToken() ? `<button onclick="startBewerken(${driver.id})">Wijzig</button>` : ""}</td>
-            </tr>`;
+<tr>
+<td>${driver.first_name ?? ""}</td>
+<td>${driver.last_name ?? ""}</td>
+<td>${driver.number ?? ""}</td>
+<td>${driver.nationality ?? ""}</td>
+<td>${dateNaarInput(driver.date_of_birth)}</td>
+<td>${driver.team?.name ?? (driver.team_id ?? "")}</td>
+<td class="actions-cell">${heeftUserCrudToken() ? `<button onclick="startBewerken(${driver.id})">Wijzig</button>` : ""}</td>
+</tr>`;
     }
-
     const renderDrivers = () => {
         const tabelInhoud = document.getElementById("tabelInhoud");
         tabelInhoud.innerHTML = `${maakNieuweDriverRij()}${drivers.map(maakDriverRij).join("")}`;
     }
-
     const laadDrivers = async () => {
-        const tabelInhoud = document.getElementById("tabelInhoud");
         const foutmelding = document.getElementById("foutmelding");
-
         try {
             await ensureLeesToken();
             const authConfig = await getAuthHeaders();
             const response = await axios.get(apiDrivers, authConfig);
-            const json = response.data;
-
-            drivers = json;
+            drivers = response.data;
             editDriverId = null;
-            tabelInhoud.innerHTML = "";
             foutmelding.textContent = "";
-
             renderDrivers();
             syncLoginStatus();
         } catch (error) {
@@ -356,46 +315,38 @@
             foutmelding.textContent = "Kon drivers niet laden. Controleer of de API draait op http://localhost:8000.";
         }
     }
-
     const startBewerken = (id) => {
         if (!heeftUserCrudToken()) {
             document.getElementById("foutmelding").textContent = "Log eerst in met een user token met CRUD-rechten.";
             return;
         }
-
         nieuwDriverModus = false;
         editDriverId = id;
         document.getElementById("foutmelding").textContent = "";
         renderDrivers();
     }
-
     const annuleerBewerken = () => {
         editDriverId = null;
         document.getElementById("foutmelding").textContent = "";
         renderDrivers();
     }
-
     const startNieuweDriver = () => {
         if (!heeftUserCrudToken()) {
             document.getElementById("foutmelding").textContent = "Log eerst in met een user token met CRUD-rechten.";
             return;
         }
-
         editDriverId = null;
         nieuwDriverModus = true;
         document.getElementById("foutmelding").textContent = "";
         renderDrivers();
     }
-
     const annuleerNieuweDriver = () => {
         nieuwDriverModus = false;
         document.getElementById("foutmelding").textContent = "";
         renderDrivers();
     }
-
     const maakDriverAan = async () => {
         const foutmelding = document.getElementById("foutmelding");
-
         try {
             const numberValue = document.getElementById("nieuw-number").value.trim();
             const teamIdValue = document.getElementById("nieuw-team").value.trim();
@@ -407,11 +358,9 @@
                 date_of_birth: document.getElementById("nieuw-dob").value || null,
                 team_id: teamIdValue ? Number(teamIdValue) : null,
             };
-
             if (!payload.first_name || !payload.last_name || !numberValue) {
                 throw new Error("Voornaam, achternaam en nummer zijn verplicht.");
             }
-
             const crudConfig = await getCrudHeaders();
             const response = await axios.post(apiDrivers, payload, crudConfig);
             drivers.unshift(response.data);
@@ -436,15 +385,12 @@
             foutmelding.textContent = error.message || "Driver aanmaken is mislukt.";
         }
     }
-
     const slaDriverOp = async (id) => {
         const foutmelding = document.getElementById("foutmelding");
-
         try {
             const numberValue = document.getElementById(`edit-number-${id}`).value.trim();
             const teamIdValue = document.getElementById(`edit-team-${id}`).value.trim();
             const dobValue = document.getElementById(`edit-dob-${id}`).value;
-
             const payload = {
                 first_name: document.getElementById(`edit-first-${id}`).value.trim(),
                 last_name: document.getElementById(`edit-last-${id}`).value.trim(),
@@ -453,19 +399,15 @@
                 date_of_birth: dobValue || null,
                 team_id: teamIdValue ? Number(teamIdValue) : null,
             };
-
             if (!payload.first_name || !payload.last_name || !numberValue) {
                 throw new Error("Voornaam, achternaam en nummer zijn verplicht.");
             }
-
             const crudConfig = await getCrudHeaders();
             const response = await axios.put(`${apiDrivers}/${id}`, payload, crudConfig);
             const index = drivers.findIndex(driver => driver.id === id);
-
             if (index >= 0) {
                 drivers[index] = response.data;
             }
-
             editDriverId = null;
             foutmelding.textContent = "";
             renderDrivers();
@@ -486,18 +428,14 @@
             foutmelding.textContent = error.message || "Driver opslaan is mislukt.";
         }
     }
-
     const verwijderDriver = async (id) => {
         const foutmelding = document.getElementById("foutmelding");
-
         if (!confirm("Weet je zeker dat je deze driver wilt verwijderen?")) {
             return;
         }
-
         try {
             const crudConfig = await getCrudHeaders();
             await axios.delete(`${apiDrivers}/${id}`, crudConfig);
-
             drivers = drivers.filter(driver => driver.id !== id);
             editDriverId = null;
             foutmelding.textContent = "";
@@ -515,7 +453,6 @@
             foutmelding.textContent = "Driver verwijderen is mislukt.";
         }
     }
-
     window.loginMetUserToken = loginMetUserToken;
     window.loginMetGuestToken = loginMetGuestToken;
     window.uitloggenUserToken = uitloggenUserToken;
@@ -527,4 +464,5 @@
     window.slaDriverOp = slaDriverOp;
     window.verwijderDriver = verwijderDriver;
 </script>
+
 </html>
