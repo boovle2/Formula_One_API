@@ -1,472 +1,299 @@
 ﻿<!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Formula 1 API Frontend</title>
+    <title>Drivers</title>
     <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
     <style>
-        div {
-            margin-top: 20px;
-        }
-
-        body {
-            width: min(95vw, 1200px);
-            margin: auto;
-            margin-top: 50px;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-
-        th,
-        td {
-            text-align: left;
-            padding-right: 10px;
-            white-space: nowrap;
-        }
-
-        th:last-child,
-        td:last-child {
-            text-align: right;
-            padding-right: 0;
-        }
-
-        .actions-cell {
-            display: flex;
-            justify-content: flex-end;
-            gap: 6px;
-            flex-wrap: wrap;
-            min-width: 210px;
-        }
-
-        button {
-            margin-left: 0;
-        }
-
-        input {
-            width: 100%;
-            max-width: 150px;
-        }
-
-        @media (max-width: 900px) {
-            body {
-                width: 98vw;
-            }
-
-            .actions-cell {
-                min-width: 170px;
-            }
-        }
+        body { max-width: 1100px; margin: 40px auto; font-family: sans-serif; }
+        .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { text-align: left; padding: 6px; white-space: nowrap; }
+        .actions { display: flex; justify-content: flex-end; gap: 6px; flex-wrap: wrap; min-width: 220px; }
+        input { max-width: 150px; }
+        #foutmelding { color: red; }
+        #ingelogdeNaam { font-weight: 600; }
     </style>
 </head>
+<body>
+    <h1>Drivers API</h1>
 
-<body onload="laadDrivers()">
-    <h1>Drivers api</h1>
-    <div>
+    <div class="row">
         <span id="loginVelden">
             <label for="crudEmail">E-mail</label>
             <input id="crudEmail" type="email" placeholder="jij@mail.com">
             <label for="crudWachtwoord">Wachtwoord</label>
             <input id="crudWachtwoord" type="password" placeholder="wachtwoord">
-            <button type="button" onclick="loginMetUserToken()">Inloggen user token</button>
+            <button onclick="loginUser()">Inloggen</button>
         </span>
-        <span id="ingelogdeNaam" style="display: none; font-weight: 600;"></span>
-        <button id="logUit" type="button" style="display: none" onclick="uitloggenUserToken()">Uitloggen</button>
-        <button type="button" onclick="startNieuweDriver()">Nieuwe driver</button>
+        <span id="ingelogdeNaam" style="display:none"></span>
+        <button id="logoutKnop" onclick="logoutUser()" style="display:none">Uitloggen</button>
+        <button onclick="startNieuw()">Nieuwe driver</button>
     </div>
-    <p id="loginStatus" style="color: #333;"></p>
-    <div style="overflow-x: auto;">
+
+    <p id="loginStatus"></p>
+    <div style="overflow-x:auto">
         <table>
-            <tr>
-                <th>First Name</th>
-                <th>Last Name</th>
-                <th>Number</th>
-                <th>Nationality</th>
-                <th>Date of Birth</th>
-                <th>Team</th>
-                <th></th>
-            </tr>
+            <thead>
+                <tr>
+                    <th>First Name</th>
+                    <th>Last Name</th>
+                    <th>Number</th>
+                    <th>Nationality</th>
+                    <th>Date of Birth</th>
+                    <th>Team</th>
+                    <th></th>
+                </tr>
+            </thead>
             <tbody id="tabelInhoud"></tbody>
         </table>
     </div>
-    <p id="foutmelding" style="color: red;"></p>
-</body>
-<script>
-    "use strict";
-    const apibasis = "http://localhost:8000/api";
-    const apiDrivers = apibasis + "/drivers";
-    const apiGuestToken = apibasis + "/tokens/guest";
-    const apiLogin = apibasis + "/login";
-    const tokenKey = "f1_token";
-    const abilitiesKey = "f1_abilities";
-    const userNameKey = "f1_user_name";
-    let drivers = [];
-    let editDriverId = null;
-    let nieuwDriverModus = false;
-    const getToken = () => localStorage.getItem(tokenKey);
-    const getAbilities = () => {
-        try {
-            return JSON.parse(localStorage.getItem(abilitiesKey) || "[]");
-        } catch {
-            return [];
-        }
-    }
-    const getUserName = () => localStorage.getItem(userNameKey) || "";
-    const heeftUserCrudToken = () => getAbilities().includes("crud");
-    const saveAuth = (token, abilities, userName = "") => {
-        localStorage.setItem(tokenKey, token);
-        localStorage.setItem(abilitiesKey, JSON.stringify(abilities || []));
-        if (userName) {
-            localStorage.setItem(userNameKey, userName);
-        } else {
-            localStorage.removeItem(userNameKey);
-        }
-    }
-    const clearAuth = () => {
-        localStorage.removeItem(tokenKey);
-        localStorage.removeItem(abilitiesKey);
-        localStorage.removeItem(userNameKey);
-    }
-    const syncLoginUi = () => {
-        const loginVelden = document.getElementById("loginVelden");
-        const ingelogdeNaam = document.getElementById("ingelogdeNaam");
-        if (heeftUserCrudToken()) {
-            loginVelden.style.display = "none";
-            ingelogdeNaam.style.display = "inline";
-            ingelogdeNaam.textContent = `Ingelogd als: ${getUserName() || "User"}`;
-            return;
-        }
-        loginVelden.style.display = "inline";
-        ingelogdeNaam.style.display = "none";
-        ingelogdeNaam.textContent = "";
-    }
-    const getAuthHeaders = () => {
-        const token = getToken();
-        if (!token) {
-            throw new Error("Geen token gevonden. Log in of vraag een gast token aan.");
-        }
-        return {
+    <p id="foutmelding"></p>
+
+    <script>
+        "use strict";
+
+        const api = "http://localhost:8000/api";
+        const endpoints = {
+            drivers: `${api}/drivers`,
+            login: `${api}/login`,
+            guest: `${api}/tokens/guest`,
+        };
+
+        const keys = {
+            token: "f1_token",
+            abilities: "f1_abilities",
+            userName: "f1_user_name",
+        };
+
+        let drivers = [];
+        let editId = null;
+        let nieuwModus = false;
+
+        const $ = (id) => document.getElementById(id);
+        const msg = (text = "") => { $("foutmelding").textContent = text; };
+        const abilities = () => JSON.parse(localStorage.getItem(keys.abilities) || "[]");
+        const hasCrud = () => abilities().includes("crud");
+        const token = () => localStorage.getItem(keys.token);
+
+        //slaat locaal de token op
+        const saveAuth = (tokenValue, tokenAbilities, name = "") => {
+            localStorage.setItem(keys.token, tokenValue);
+            localStorage.setItem(keys.abilities, JSON.stringify(tokenAbilities || []));
+            if (name) localStorage.setItem(keys.userName, name);
+            else localStorage.removeItem(keys.userName);
+        };
+        //verwijdert token uit local storage
+        const clearAuth = () => {
+            Object.values(keys).forEach((k) => localStorage.removeItem(k));
+        };
+        //genereert de headers voor een request, inclusief de token
+        const headers = () => ({
             headers: {
-                Authorization: `Bearer ${token}`,
+                Authorization: `Bearer ${token()}`,
                 Accept: "application/json",
             },
-        };
-    }
-    const ensureLeesToken = async () => {
-        if (getToken()) {
-            return;
-        }
-        const response = await axios.post(apiGuestToken, {}, { headers: { Accept: "application/json" } });
-        saveAuth(response.data.token, response.data.abilities || ["read"]);
-    }
-    const getCrudHeaders = () => {
-        if (!heeftUserCrudToken()) {
-            throw new Error("Log eerst in met een user token met CRUD-rechten.");
-        }
-        return getAuthHeaders();
-    }
-    const updateLoginStatus = (tekst, kleur = "#333") => {
-        const status = document.getElementById("loginStatus");
-        status.style.color = kleur;
-        status.textContent = tekst;
-    }
-    const syncLoginStatus = () => {
-        if (!getToken()) {
-            updateLoginStatus("Niet ingelogd. Alleen lezen met gast token.");
-            syncLoginUi();
-            return;
-        }
-        if (heeftUserCrudToken()) {
-            updateLoginStatus("Ingelogd met user token. Bewerken en verwijderen is beschikbaar.", "green");
-            syncLoginUi();
-            return;
-        }
-        updateLoginStatus("Ingelogd met gast/read token. Alleen lezen is beschikbaar.");
-        syncLoginUi();
-    }
-    const loginMetUserToken = async () => {
-        logUit.style.display = "inline";
-        const email = document.getElementById("crudEmail").value.trim();
-        const password = document.getElementById("crudWachtwoord").value;
-        const foutmelding = document.getElementById("foutmelding");
-        if (!email || !password) {
-            updateLoginStatus("Vul e-mail en wachtwoord in.", "red");
-            return;
-        }
-        try {
-            
-            const loginResponse = await axios.post(apiLogin, { email, password }, {
-                headers: { Accept: "application/json" },
-            });
-            saveAuth(
-                loginResponse.data.token,
-                loginResponse.data.abilities || [],
-                loginResponse.data.user?.name || ""
-            );
-            foutmelding.textContent = "";
-            syncLoginStatus();
-            renderDrivers();
-        } catch (error) {
-            logUit.style.display = "none";
-            console.error(error);
-            clearAuth();
-            editDriverId = null;
-            nieuwDriverModus = false;
-            renderDrivers();
-            updateLoginStatus("Inloggen mislukt. Controleer je gegevens.", "red");
-        }
-    }
-    const loginMetGuestToken = async () => {
-        const foutmelding = document.getElementById("foutmelding");
-        try {
-            const response = await axios.post(apiGuestToken, {}, { headers: { Accept: "application/json" } });
-            saveAuth(response.data.token, response.data.abilities || ["read"]);
-            editDriverId = null;
-            nieuwDriverModus = false;
-            foutmelding.textContent = "";
-            syncLoginStatus();
-            renderDrivers();
-        } catch (error) {
-            console.error(error);
-            updateLoginStatus("Gast token ophalen mislukt.", "red");
-        }
-    }
-    const uitloggenUserToken = async () => {
-        logUit.style.display = "none";
-        crudEmail.value = "";
-        crudWachtwoord.value = "";
-        clearAuth();
-        editDriverId = null;
-        nieuwDriverModus = false;
-        await loginMetGuestToken();
-    }
-    const dateNaarInput = (value) => {
-        if (!value) {
-            return "";
-        }
-        return String(value).slice(0, 10);
-    }
-    const maakNieuweDriverRij = () => {
-        if (!heeftUserCrudToken() || !nieuwDriverModus) {
-            return "";
-        }
-        return `
-<tr>
-<td><input id="nieuw-first" placeholder="First name"></td>
-<td><input id="nieuw-last" placeholder="Last name"></td>
-<td><input id="nieuw-number" type="number" min="1" max="99" placeholder="Number"></td>
-<td><input id="nieuw-nationality" placeholder="Nationality"></td>
-<td><input id="nieuw-dob" type="date"></td>
-<td><input id="nieuw-team" type="number" min="1" placeholder="team id"></td>
-<td class="actions-cell">
-<button onclick="maakDriverAan()">Aanmaken</button>
-<button onclick="annuleerNieuweDriver()">Annuleer</button>
-</td>
-</tr>`;
-    }
-    const maakDriverRij = (driver) => {
-        if (heeftUserCrudToken() && driver.id === editDriverId) {
-            return `
-<tr>
-<td><input id="edit-first-${driver.id}" value="${driver.first_name ?? ""}"></td>
-<td><input id="edit-last-${driver.id}" value="${driver.last_name ?? ""}"></td>
-<td><input id="edit-number-${driver.id}" type="number" min="1" max="99" value="${driver.number ?? ""}"></td>
-<td><input id="edit-nationality-${driver.id}" value="${driver.nationality ?? ""}"></td>
-<td><input id="edit-dob-${driver.id}" type="date" value="${dateNaarInput(driver.date_of_birth)}"></td>
-<td><input id="edit-team-${driver.id}" type="number" min="1" value="${driver.team_id ?? ""}" placeholder="team id"></td>
-<td class="actions-cell">
-<button onclick="slaDriverOp(${driver.id})">Opslaan</button>
-<button onclick="verwijderDriver(${driver.id})">Verwijder</button>
-<button onclick="annuleerBewerken()">Annuleer</button>
-</td>
-</tr>`;
-        }
-        return `
-<tr>
-<td>${driver.first_name ?? ""}</td>
-<td>${driver.last_name ?? ""}</td>
-<td>${driver.number ?? ""}</td>
-<td>${driver.nationality ?? ""}</td>
-<td>${dateNaarInput(driver.date_of_birth)}</td>
-<td>${driver.team?.name ?? (driver.team_id ?? "")}</td>
-<td class="actions-cell">${heeftUserCrudToken() ? `<button onclick="startBewerken(${driver.id})">Wijzig</button>` : ""}</td>
-</tr>`;
-    }
-    const renderDrivers = () => {
-        const tabelInhoud = document.getElementById("tabelInhoud");
-        tabelInhoud.innerHTML = `${maakNieuweDriverRij()}${drivers.map(maakDriverRij).join("")}`;
-    }
-    const laadDrivers = async () => {
-        const foutmelding = document.getElementById("foutmelding");
-        try {
-            await ensureLeesToken();
-            const authConfig = await getAuthHeaders();
-            const response = await axios.get(apiDrivers, authConfig);
-            drivers = response.data;
-            editDriverId = null;
-            foutmelding.textContent = "";
-            renderDrivers();
-            syncLoginStatus();
-        } catch (error) {
-            console.error(error);
-            if (error.response?.status === 401) {
-                clearAuth();
-            }
-            foutmelding.textContent = "Kon drivers niet laden. Controleer of de API draait op http://localhost:8000.";
-        }
-    }
-    const startBewerken = (id) => {
-        if (!heeftUserCrudToken()) {
-            document.getElementById("foutmelding").textContent = "Log eerst in met een user token met CRUD-rechten.";
-            return;
-        }
-        nieuwDriverModus = false;
-        editDriverId = id;
-        document.getElementById("foutmelding").textContent = "";
-        renderDrivers();
-    }
-    const annuleerBewerken = () => {
-        editDriverId = null;
-        document.getElementById("foutmelding").textContent = "";
-        renderDrivers();
-    }
-    const startNieuweDriver = () => {
-        if (!heeftUserCrudToken()) {
-            document.getElementById("foutmelding").textContent = "Log eerst in met een user token met CRUD-rechten.";
-            return;
-        }
-        editDriverId = null;
-        nieuwDriverModus = true;
-        document.getElementById("foutmelding").textContent = "";
-        renderDrivers();
-    }
-    const annuleerNieuweDriver = () => {
-        nieuwDriverModus = false;
-        document.getElementById("foutmelding").textContent = "";
-        renderDrivers();
-    }
-    const maakDriverAan = async () => {
-        const foutmelding = document.getElementById("foutmelding");
-        try {
-            const numberValue = document.getElementById("nieuw-number").value.trim();
-            const teamIdValue = document.getElementById("nieuw-team").value.trim();
-            const payload = {
-                first_name: document.getElementById("nieuw-first").value.trim(),
-                last_name: document.getElementById("nieuw-last").value.trim(),
-                number: Number(numberValue),
-                nationality: document.getElementById("nieuw-nationality").value.trim() || null,
-                date_of_birth: document.getElementById("nieuw-dob").value || null,
-                team_id: teamIdValue ? Number(teamIdValue) : null,
-            };
-            if (!payload.first_name || !payload.last_name || !numberValue) {
-                throw new Error("Voornaam, achternaam en nummer zijn verplicht.");
-            }
-            const crudConfig = await getCrudHeaders();
-            const response = await axios.post(apiDrivers, payload, crudConfig);
-            drivers.unshift(response.data);
-            nieuwDriverModus = false;
-            foutmelding.textContent = "";
-            renderDrivers();
-        } catch (error) {
-            console.error(error);
-            if (error.response?.status === 422) {
-                foutmelding.textContent = "Validatie mislukt. Controleer de invoer.";
-                return;
-            }
-            if (error.response?.status === 401) {
-                clearAuth();
-                editDriverId = null;
-                nieuwDriverModus = false;
-                renderDrivers();
-                syncLoginStatus();
-                foutmelding.textContent = "Inloggen mislukt of verlopen. Vul opnieuw e-mail en wachtwoord in.";
-                return;
-            }
-            foutmelding.textContent = error.message || "Driver aanmaken is mislukt.";
-        }
-    }
-    const slaDriverOp = async (id) => {
-        const foutmelding = document.getElementById("foutmelding");
-        try {
-            const numberValue = document.getElementById(`edit-number-${id}`).value.trim();
-            const teamIdValue = document.getElementById(`edit-team-${id}`).value.trim();
-            const dobValue = document.getElementById(`edit-dob-${id}`).value;
-            const payload = {
-                first_name: document.getElementById(`edit-first-${id}`).value.trim(),
-                last_name: document.getElementById(`edit-last-${id}`).value.trim(),
-                number: Number(numberValue),
-                nationality: document.getElementById(`edit-nationality-${id}`).value.trim() || null,
-                date_of_birth: dobValue || null,
-                team_id: teamIdValue ? Number(teamIdValue) : null,
-            };
-            if (!payload.first_name || !payload.last_name || !numberValue) {
-                throw new Error("Voornaam, achternaam en nummer zijn verplicht.");
-            }
-            const crudConfig = await getCrudHeaders();
-            const response = await axios.put(`${apiDrivers}/${id}`, payload, crudConfig);
-            const index = drivers.findIndex(driver => driver.id === id);
-            if (index >= 0) {
-                drivers[index] = response.data;
-            }
-            editDriverId = null;
-            foutmelding.textContent = "";
-            renderDrivers();
-        } catch (error) {
-            console.error(error);
-            if (error.response?.status === 422) {
-                foutmelding.textContent = "Validatie mislukt. Controleer de invoer.";
-                return;
-            }
-            if (error.response?.status === 401) {
-                clearAuth();
-                editDriverId = null;
-                renderDrivers();
-                syncLoginStatus();
-                foutmelding.textContent = "Inloggen mislukt of verlopen. Vul opnieuw e-mail en wachtwoord in.";
-                return;
-            }
-            foutmelding.textContent = error.message || "Driver opslaan is mislukt.";
-        }
-    }
-    const verwijderDriver = async (id) => {
-        const foutmelding = document.getElementById("foutmelding");
-        if (!confirm("Weet je zeker dat je deze driver wilt verwijderen?")) {
-            return;
-        }
-        try {
-            const crudConfig = await getCrudHeaders();
-            await axios.delete(`${apiDrivers}/${id}`, crudConfig);
-            drivers = drivers.filter(driver => driver.id !== id);
-            editDriverId = null;
-            foutmelding.textContent = "";
-            renderDrivers();
-        } catch (error) {
-            console.error(error);
-            if (error.response?.status === 401) {
-                clearAuth();
-                editDriverId = null;
-                renderDrivers();
-                syncLoginStatus();
-                foutmelding.textContent = "Inloggen mislukt of verlopen. Vul opnieuw e-mail en wachtwoord in.";
-                return;
-            }
-            foutmelding.textContent = "Driver verwijderen is mislukt.";
-        }
-    }
-    window.loginMetUserToken = loginMetUserToken;
-    window.loginMetGuestToken = loginMetGuestToken;
-    window.uitloggenUserToken = uitloggenUserToken;
-    window.startNieuweDriver = startNieuweDriver;
-    window.annuleerNieuweDriver = annuleerNieuweDriver;
-    window.maakDriverAan = maakDriverAan;
-    window.startBewerken = startBewerken;
-    window.annuleerBewerken = annuleerBewerken;
-    window.slaDriverOp = slaDriverOp;
-    window.verwijderDriver = verwijderDriver;
-</script>
+        });
+        //past de ui aan op basis van je token
+        const updateLoginUi = () => {
+            const logged = hasCrud();
+            $("loginVelden").style.display = logged ? "none" : "inline";
+            $("ingelogdeNaam").style.display = logged ? "inline" : "none";
+            $("logoutKnop").style.display = logged ? "inline-block" : "none";
+            $("ingelogdeNaam").textContent = logged
+                ? `Ingelogd als: ${localStorage.getItem(keys.userName) || "User"}`
+                : "";
 
+            $("loginStatus").style.color = logged ? "green" : "#333";
+            $("loginStatus").textContent = !token()
+                ? "Niet ingelogd."
+                : logged
+                    ? "User token met CRUD actief."
+                    : "Gast token actief (alleen lezen).";
+        };
+        //zorgt dat je een token hebt om te lezen, maakt een gast token aan als je die nog niet hebt
+        const ensureReadToken = async () => {
+            if (token()) return;
+            const res = await axios.post(endpoints.guest, {}, { headers: { Accept: "application/json" } });
+            saveAuth(res.data.token, res.data.abilities || ["read"]);
+        };
+        //controle of je een crud token hebt
+        const requireCrud = () => {
+            if (!hasCrud()) throw new Error("Log eerst in met een user token met CRUD-rechten.");
+        };
+        //het bijwerken
+        const rowEdit = (d) => `
+            <tr>
+                <td><input id="edit-first-${d.id}" value="${d.first_name ?? ""}"></td>
+                <td><input id="edit-last-${d.id}" value="${d.last_name ?? ""}"></td>
+                <td><input id="edit-number-${d.id}" type="number" min="1" max="99" value="${d.number ?? ""}"></td>
+                <td><input id="edit-nationality-${d.id}" value="${d.nationality ?? ""}"></td>
+                <td><input id="edit-dob-${d.id}" type="date" value="${String(d.date_of_birth || "").slice(0, 10)}"></td>
+                <td><input id="edit-team-${d.id}" type="number" min="1" value="${d.team_id ?? ""}"></td>
+                <td class="actions">
+                    <button onclick="saveDriver(${d.id})">Opslaan</button>
+                    <button onclick="deleteDriver(${d.id})">Verwijder</button>
+                    <button onclick="cancelEdit()">Annuleer</button>
+                </td>
+            </tr>`;
+            //het aanmaken
+        const rowNew = () => `
+            <tr>
+                <td><input id="new-first"></td>
+                <td><input id="new-last"></td>
+                <td><input id="new-number" type="number" min="1" max="99"></td>
+                <td><input id="new-nationality"></td>
+                <td><input id="new-dob" type="date"></td>
+                <td><input id="new-team" type="number" min="1"></td>
+                <td class="actions">
+                    <button onclick="createDriver()">Aanmaken</button>
+                    <button onclick="cancelNew()">Annuleer</button>
+                </td>
+            </tr>`;
+            //de normale weergave van een rij
+        const rowView = (d) => `
+            <tr>
+                <td>${d.first_name ?? ""}</td>
+                <td>${d.last_name ?? ""}</td>
+                <td>${d.number ?? ""}</td>
+                <td>${d.nationality ?? ""}</td>
+                <td>${String(d.date_of_birth || "").slice(0, 10)}</td>
+                <td>${d.team?.name ?? (d.team_id ?? "")}</td>
+                <td class="actions">${hasCrud() ? `<button onclick="startEdit(${d.id})">Wijzig</button>` : ""}</td>
+            </tr>`;
+            //
+        const render = () => {
+            const rows = [];
+            if (hasCrud() && nieuwModus) rows.push(rowNew());
+            drivers.forEach((d) => rows.push(hasCrud() && d.id === editId ? rowEdit(d) : rowView(d)));
+            $("tabelInhoud").innerHTML = rows.join("");
+            updateLoginUi();
+        };
+        //de functie die de drivers ophaalt en in de tabel zet
+        const loadDrivers = async () => {
+            try {
+                await ensureReadToken();
+                const res = await axios.get(endpoints.drivers, headers());
+                drivers = res.data;
+                editId = null;
+                msg();
+                render();
+            } catch (e) {
+                if (e.response?.status === 401) clearAuth();
+                msg("Kon drivers niet laden. Controleer of de API draait op http://localhost:8000.");
+                updateLoginUi();
+            }
+        };
+        //een wrapper om een actie uit te voeren die een crud token vereist, met foutafhandeling
+        const withCrud = async (fn) => {
+            try {
+                requireCrud();
+                await fn();
+            } catch (e) {
+                if (e.response?.status === 401) {
+                    clearAuth();
+                    editId = null;
+                    nieuwModus = false;
+                    render();
+                    msg("Inloggen verlopen. Log opnieuw in.");
+                    return;
+                }
+                if (e.response?.status === 422) {
+                    msg("Validatie mislukt. Controleer je invoer.");
+                    return;
+                }
+                msg(e.message || "Actie mislukt.");
+            }
+        };
+        //het inloggen van een gebruiker om een user token te krijgen
+        async function loginUser() {
+            const email = $("crudEmail").value.trim();
+            const password = $("crudWachtwoord").value;
+            if (!email || !password) return msg("Vul e-mail en wachtwoord in.");
+            try {
+                const res = await axios.post(endpoints.login, { email, password }, { headers: { Accept: "application/json" } });
+                saveAuth(res.data.token, res.data.abilities || [], res.data.user?.name || "");
+                msg();
+                render();
+            } catch {
+                clearAuth();
+                msg("Inloggen mislukt.");
+                render();
+            }
+        }
+        //het uitloggen van een gebruiker
+        function logoutUser() {
+            clearAuth();
+            editId = null;
+            nieuwModus = false;
+            loadDrivers();
+        }
+        //starten van het aanmaken van een nieuwe driver
+        function startNieuw() {
+            if (!hasCrud()) return msg("Log eerst in met user token.");
+            editId = null;
+            nieuwModus = true;
+            msg();
+            render();
+        }
+
+        function cancelNew() { nieuwModus = false; msg(); render(); }
+        function startEdit(id) { if (!hasCrud()) return msg("Log eerst in met user token."); nieuwModus = false; editId = id; msg(); render(); }
+        function cancelEdit() { editId = null; msg(); render(); }
+        //de functies voor het aanmaken van ee nieuwe driver
+        async function createDriver() {
+            await withCrud(async () => {
+                const numberValue = $("new-number").value.trim();
+                const payload = {
+                    first_name: $("new-first").value.trim(),
+                    last_name: $("new-last").value.trim(),
+                    number: Number(numberValue),
+                    nationality: $("new-nationality").value.trim() || null,
+                    date_of_birth: $("new-dob").value || null,
+                    team_id: $("new-team").value.trim() ? Number($("new-team").value.trim()) : null,
+                };
+                if (!payload.first_name || !payload.last_name || !numberValue) throw new Error("Voornaam, achternaam en nummer zijn verplicht.");
+                const res = await axios.post(endpoints.drivers, payload, headers());
+                drivers.unshift(res.data);
+                nieuwModus = false;
+                msg();
+                render();
+            });
+        }
+        // het oplaan van een aangepaste driver
+        async function saveDriver(id) {
+            await withCrud(async () => {
+                const numberValue = $(`edit-number-${id}`).value.trim();
+                const payload = {
+                    first_name: $(`edit-first-${id}`).value.trim(),
+                    last_name: $(`edit-last-${id}`).value.trim(),
+                    number: Number(numberValue),
+                    nationality: $(`edit-nationality-${id}`).value.trim() || null,
+                    date_of_birth: $(`edit-dob-${id}`).value || null,
+                    team_id: $(`edit-team-${id}`).value.trim() ? Number($(`edit-team-${id}`).value.trim()) : null,
+                };
+                if (!payload.first_name || !payload.last_name || !numberValue) throw new Error("Voornaam, achternaam en nummer zijn verplicht.");
+                const res = await axios.put(`${endpoints.drivers}/${id}`, payload, headers());
+                const i = drivers.findIndex((d) => d.id === id);
+                if (i >= 0) drivers[i] = res.data;
+                editId = null;
+                msg();
+                render();
+            });
+        }
+        //de functie voor het verwijderen van een driver
+        async function deleteDriver(id) {
+            if (!confirm("Weet je zeker dat je deze driver wilt verwijderen?")) return;
+            await withCrud(async () => {
+                await axios.delete(`${endpoints.drivers}/${id}`, headers());
+                drivers = drivers.filter((d) => d.id !== id);
+                editId = null;
+                msg();
+                render();
+            });
+        }
+        loadDrivers();
+    </script>
+</body>
 </html>

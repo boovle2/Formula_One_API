@@ -1,442 +1,296 @@
 ﻿<!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Formula 1 API Frontend</title>
+    <title>Teams</title>
     <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
     <style>
-        div {
-            margin-top: 20px;
-        }
-
-        body {
-            width: min(95vw, 1200px);
-            margin: auto;
-            margin-top: 50px;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-
-        th,
-        td {
-            text-align: left;
-            padding-right: 10px;
-            white-space: nowrap;
-        }
-
-        th:last-child,
-        td:last-child {
-            text-align: right;
-            padding-right: 0;
-        }
-
-        .actions-cell {
-            display: flex;
-            justify-content: flex-end;
-            gap: 6px;
-            flex-wrap: wrap;
-            min-width: 210px;
-        }
-
-        button {
-            margin-left: 0;
-        }
-
-        input {
-            width: 100%;
-            max-width: 150px;
-        }
-
-        @media (max-width: 900px) {
-            body {
-                width: 98vw;
-            }
-
-            .actions-cell {
-                min-width: 170px;
-            }
-        }
+        body { max-width: 1100px; margin: 40px auto; font-family: sans-serif; }
+        .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { text-align: left; padding: 6px; white-space: nowrap; }
+        .actions { display: flex; justify-content: flex-end; gap: 6px; flex-wrap: wrap; min-width: 220px; }
+        input { max-width: 150px; }
+        #foutmelding { color: red; }
+        #ingelogdeNaam { font-weight: 600; }
     </style>
 </head>
+<body>
+    <h1>Teams API</h1>
 
-<body onload="laadTeams()">
-    <h1>Teams api</h1>
-    <div>
+    <div class="row">
         <span id="loginVelden">
             <label for="crudEmail">E-mail</label>
             <input id="crudEmail" type="email" placeholder="jij@mail.com">
             <label for="crudWachtwoord">Wachtwoord</label>
             <input id="crudWachtwoord" type="password" placeholder="wachtwoord">
-            <button type="button" onclick="loginMetUserToken()">Inloggen user token</button>
+            <button onclick="loginUser()">Inloggen</button>
         </span>
-        <span id="ingelogdeNaam" style="display: none; font-weight: 600;"></span>
-        <button type="button" id="logUit" style="display: none" onclick="uitloggenUserToken()">Uitloggen</button>
-        <button type="button" onclick="startNieuwTeam()">Nieuw team</button>
+        <span id="ingelogdeNaam" style="display:none"></span>
+        <button id="logoutKnop" onclick="logoutUser()" style="display:none">Uitloggen</button>
+        <button onclick="startNieuw()">Nieuw team</button>
     </div>
-    <p id="loginStatus" style="color: #333;"></p>
-    <div style="overflow-x: auto;">
+
+    <p id="loginStatus"></p>
+    <div style="overflow-x:auto">
         <table>
-            <tr>
-                <th>Name</th>
-                <th>Base Country</th>
-                <th>Team Principal</th>
-                <th></th>
-            </tr>
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Base Country</th>
+                    <th>Team Principal</th>
+                    <th></th>
+                </tr>
+            </thead>
             <tbody id="tabelInhoud"></tbody>
         </table>
     </div>
-    <p id="foutmelding" style="color: red;"></p>
-</body>
-<script>
-    "use strict";
-    const apibasis = "http://localhost:8000/api";
-    const apiTeams = apibasis + "/teams";
-    const apiGuestToken = apibasis + "/tokens/guest";
-    const apiLogin = apibasis + "/login";
-    const tokenKey = "f1_token";
-    const abilitiesKey = "f1_abilities";
-    const userNameKey = "f1_user_name";
-    let teams = [];
-    let editTeamId = null;
-    let nieuwTeamModus = false;
-    const getToken = () => localStorage.getItem(tokenKey);
-    const getAbilities = () => {
-        try {
-            return JSON.parse(localStorage.getItem(abilitiesKey) || "[]");
-        } catch {
-            return [];
-        }
-    }
-    const getUserName = () => localStorage.getItem(userNameKey) || "";
-    const heeftUserCrudToken = () => getAbilities().includes("crud");
-    const saveAuth = (token, abilities, userName = "") => {
-        localStorage.setItem(tokenKey, token);
-        localStorage.setItem(abilitiesKey, JSON.stringify(abilities || []));
-        if (userName) {
-            localStorage.setItem(userNameKey, userName);
-        } else {
-            localStorage.removeItem(userNameKey);
-        }
-    }
-    const clearAuth = () => {
-        localStorage.removeItem(tokenKey);
-        localStorage.removeItem(abilitiesKey);
-        localStorage.removeItem(userNameKey);
-    }
-    const syncLoginUi = () => {
-        const loginVelden = document.getElementById("loginVelden");
-        const ingelogdeNaam = document.getElementById("ingelogdeNaam");
-        if (heeftUserCrudToken()) {
-            loginVelden.style.display = "none";
-            ingelogdeNaam.style.display = "inline";
-            ingelogdeNaam.textContent = `Ingelogd als: ${getUserName() || "User"}`;
-            return;
-        }
-        loginVelden.style.display = "inline";
-        ingelogdeNaam.style.display = "none";
-        ingelogdeNaam.textContent = "";
-    }
-    const getAuthHeaders = () => {
-        const token = getToken();
-        if (!token) {
-            throw new Error("Geen token gevonden. Log in of vraag een gast token aan.");
-        }
-        return {
+    <p id="foutmelding"></p>
+
+    <script>
+        "use strict";
+
+        const api = "http://localhost:8000/api";
+        const endpoints = {
+            teams: `${api}/teams`,
+            login: `${api}/login`,
+            guest: `${api}/tokens/guest`,
+        };
+
+        const keys = {
+            token: "f1_token",
+            abilities: "f1_abilities",
+            userName: "f1_user_name",
+        };
+
+        let teams = [];
+        let editId = null;
+        let nieuwModus = false;
+
+        const $ = (id) => document.getElementById(id);
+        const msg = (text = "") => { $("foutmelding").textContent = text; };
+        const abilities = () => JSON.parse(localStorage.getItem(keys.abilities) || "[]");
+        const hasCrud = () => abilities().includes("crud");
+        const token = () => localStorage.getItem(keys.token);
+
+        // slaat token en user info op
+        const saveAuth = (tokenValue, tokenAbilities, name = "") => {
+            localStorage.setItem(keys.token, tokenValue);
+            localStorage.setItem(keys.abilities, JSON.stringify(tokenAbilities || []));
+            if (name) localStorage.setItem(keys.userName, name);
+            else localStorage.removeItem(keys.userName);
+        };
+
+        // wist token data uit local storage
+        const clearAuth = () => {
+            Object.values(keys).forEach((k) => localStorage.removeItem(k));
+        };
+
+        // standaard auth headers voor API calls
+        const headers = () => ({
             headers: {
-                Authorization: `Bearer ${token}`,
+                Authorization: `Bearer ${token()}`,
                 Accept: "application/json",
             },
-        };
-    }
-    const ensureLeesToken = async () => {
-        if (getToken()) {
-            return;
-        }
-        const response = await axios.post(apiGuestToken, {}, { headers: { Accept: "application/json" } });
-        saveAuth(response.data.token, response.data.abilities || ["read"]);
-    }
-    const getCrudHeaders = () => {
-        if (!heeftUserCrudToken()) {
-            throw new Error("Log eerst in met een user token met CRUD-rechten.");
-        }
-        return getAuthHeaders();
-    }
-    const updateLoginStatus = (tekst, kleur = "#333") => {
-        const status = document.getElementById("loginStatus");
-        status.style.color = kleur;
-        status.textContent = tekst;
-    }
-    const syncLoginStatus = () => {
-        if (!getToken()) {
-            updateLoginStatus("Niet ingelogd. Alleen lezen met gast token.");
-            syncLoginUi();
-            return;
-        }
-        if (heeftUserCrudToken()) {
-            updateLoginStatus("Ingelogd met user token. Bewerken en verwijderen is beschikbaar.", "green");
-            syncLoginUi();
-            return;
-        }
-        updateLoginStatus("Ingelogd met gast/read token. Alleen lezen is beschikbaar.");
-        syncLoginUi();
-    }
-    const loginMetUserToken = async () => {
-        logUit.style.display = "inline";
-        const email = document.getElementById("crudEmail").value.trim();
-        const password = document.getElementById("crudWachtwoord").value;
-        const foutmelding = document.getElementById("foutmelding");
-        if (!email || !password) {
-            updateLoginStatus("Vul e-mail en wachtwoord in.", "red");
-            return;
-        }
-        try {
-            const loginResponse = await axios.post(apiLogin, { email, password }, {
-                headers: { Accept: "application/json" },
-            });
-            saveAuth(
-                loginResponse.data.token,
-                loginResponse.data.abilities || [],
-                loginResponse.data.user?.name || ""
-            );
-            foutmelding.textContent = "";
-            syncLoginStatus();
-            renderTeams();
-        } catch (error) {
-            logUit.style.display = "none";
-            console.error(error);
-            clearAuth();
-            editTeamId = null;
-            nieuwTeamModus = false;
-            renderTeams();
-            updateLoginStatus("Inloggen mislukt. Controleer je gegevens.", "red");
-        }
-    }
-    const loginMetGuestToken = async () => {
-        const foutmelding = document.getElementById("foutmelding");
-        try {
-            const response = await axios.post(apiGuestToken, {}, { headers: { Accept: "application/json" } });
-            saveAuth(response.data.token, response.data.abilities || ["read"]);
-            editTeamId = null;
-            nieuwTeamModus = false;
-            foutmelding.textContent = "";
-            syncLoginStatus();
-            renderTeams();
-        } catch (error) {
-            console.error(error);
-            updateLoginStatus("Gast token ophalen mislukt.", "red");
-        }
-    }
-    const uitloggenUserToken = async () => {
-        logUit.style.display = "none";
-        crudEmail.value = "";
-        crudWachtwoord.value = "";
-        clearAuth();
-        editTeamId = null;
-        nieuwTeamModus = false;
-        await loginMetGuestToken();
-    }
-    const maakTeamRij = (team) => {
-        if (heeftUserCrudToken() && team.id === editTeamId) {
-            return `
-<tr>
-<td><input id="edit-name-${team.id}" value="${team.name ?? ""}"></td>
-<td><input id="edit-base-${team.id}" value="${team.base_country ?? ""}"></td>
-<td><input id="edit-principal-${team.id}" value="${team.team_principal ?? ""}"></td>
-<td class="actions-cell">
-<button onclick="slaTeamOp(${team.id})">Opslaan</button>
-<button onclick="verwijderTeam(${team.id})">Verwijder</button>
-<button onclick="annuleerBewerken()">Annuleer</button>
-</td>
-</tr>`;
-        }
-        return `
-<tr>
-<td>${team.name ?? ""}</td>
-<td>${team.base_country ?? ""}</td>
-<td>${team.team_principal ?? ""}</td>
-<td class="actions-cell">${heeftUserCrudToken() ? `<button onclick="startBewerken(${team.id})">Wijzig</button>` : ""}</td>
-</tr>`;
-    }
-    const maakNieuwTeamRij = () => {
-        if (!heeftUserCrudToken() || !nieuwTeamModus) {
-            return "";
-        }
-        return `
-<tr>
-<td><input id="nieuw-name" placeholder="Name"></td>
-<td><input id="nieuw-base" placeholder="Base country"></td>
-<td><input id="nieuw-principal" placeholder="Team principal"></td>
-<td class="actions-cell">
-<button onclick="maakTeamAan()">Aanmaken</button>
-<button onclick="annuleerNieuwTeam()">Annuleer</button>
-</td>
-</tr>`;
-    }
-    const renderTeams = () => {
-        const tabelInhoud = document.getElementById("tabelInhoud");
-        tabelInhoud.innerHTML = `${maakNieuwTeamRij()}${teams.map(maakTeamRij).join("")}`;
-    }
-    const laadTeams = async () => {
-        const foutmelding = document.getElementById("foutmelding");
-        try {
-            await ensureLeesToken();
-            const authConfig = await getAuthHeaders();
-            const response = await axios.get(apiTeams, authConfig);
-            teams = response.data;
-            editTeamId = null;
-            foutmelding.textContent = "";
-            renderTeams();
-            syncLoginStatus();
-        } catch (error) {
-            console.error(error);
-            if (error.response?.status === 401) {
-                clearAuth();
-            }
-            foutmelding.textContent = "Kon teams niet laden. Controleer of de API draait op http://localhost:8000.";
-        }
-    }
-    const startBewerken = (id) => {
-        if (!heeftUserCrudToken()) {
-            document.getElementById("foutmelding").textContent = "Log eerst in met een user token met CRUD-rechten.";
-            return;
-        }
-        nieuwTeamModus = false;
-        editTeamId = id;
-        document.getElementById("foutmelding").textContent = "";
-        renderTeams();
-    }
-    const annuleerBewerken = () => {
-        editTeamId = null;
-        document.getElementById("foutmelding").textContent = "";
-        renderTeams();
-    }
-    const startNieuwTeam = () => {
-        if (!heeftUserCrudToken()) {
-            document.getElementById("foutmelding").textContent = "Log eerst in met een user token met CRUD-rechten.";
-            return;
-        }
-        editTeamId = null;
-        nieuwTeamModus = true;
-        document.getElementById("foutmelding").textContent = "";
-        renderTeams();
-    }
-    const annuleerNieuwTeam = () => {
-        nieuwTeamModus = false;
-        document.getElementById("foutmelding").textContent = "";
-        renderTeams();
-    }
-    const maakTeamAan = async () => {
-        const foutmelding = document.getElementById("foutmelding");
-        try {
-            const payload = {
-                name: document.getElementById("nieuw-name").value.trim(),
-                base_country: document.getElementById("nieuw-base").value.trim() || null,
-                team_principal: document.getElementById("nieuw-principal").value.trim() || null,
-            };
-            if (!payload.name) {
-                throw new Error("Naam is verplicht.");
-            }
-            const crudConfig = await getCrudHeaders();
-            const response = await axios.post(apiTeams, payload, crudConfig);
-            teams.unshift(response.data);
-            nieuwTeamModus = false;
-            foutmelding.textContent = "";
-            renderTeams();
-        } catch (error) {
-            console.error(error);
-            if (error.response?.status === 422) {
-                foutmelding.textContent = "Validatie mislukt. Controleer de invoer.";
-                return;
-            }
-            if (error.response?.status === 401) {
-                clearAuth();
-                editTeamId = null;
-                nieuwTeamModus = false;
-                renderTeams();
-                syncLoginStatus();
-                foutmelding.textContent = "Inloggen mislukt of verlopen. Vul opnieuw e-mail en wachtwoord in.";
-                return;
-            }
-            foutmelding.textContent = error.message || "Team aanmaken is mislukt.";
-        }
-    }
-    const slaTeamOp = async (id) => {
-        const foutmelding = document.getElementById("foutmelding");
-        try {
-            const payload = {
-                name: document.getElementById(`edit-name-${id}`).value.trim(),
-                base_country: document.getElementById(`edit-base-${id}`).value.trim() || null,
-                team_principal: document.getElementById(`edit-principal-${id}`).value.trim() || null,
-            };
-            if (!payload.name) {
-                throw new Error("Naam is verplicht.");
-            }
-            const crudConfig = await getCrudHeaders();
-            const response = await axios.put(`${apiTeams}/${id}`, payload, crudConfig);
-            const index = teams.findIndex(team => team.id === id);
-            if (index >= 0) {
-                teams[index] = response.data;
-            }
-            editTeamId = null;
-            foutmelding.textContent = "";
-            renderTeams();
-        } catch (error) {
-            console.error(error);
-            if (error.response?.status === 422) {
-                foutmelding.textContent = "Validatie mislukt. Controleer de invoer.";
-                return;
-            }
-            if (error.response?.status === 401) {
-                clearAuth();
-                editTeamId = null;
-                renderTeams();
-                syncLoginStatus();
-                foutmelding.textContent = "Inloggen mislukt of verlopen. Vul opnieuw e-mail en wachtwoord in.";
-                return;
-            }
-            foutmelding.textContent = error.message || "Team opslaan is mislukt.";
-        }
-    }
-    const verwijderTeam = async (id) => {
-        const foutmelding = document.getElementById("foutmelding");
-        if (!confirm("Weet je zeker dat je dit team wilt verwijderen?")) {
-            return;
-        }
-        try {
-            const crudConfig = await getCrudHeaders();
-            await axios.delete(`${apiTeams}/${id}`, crudConfig);
-            teams = teams.filter(team => team.id !== id);
-            editTeamId = null;
-            foutmelding.textContent = "";
-            renderTeams();
-        } catch (error) {
-            console.error(error);
-            if (error.response?.status === 401) {
-                clearAuth();
-                editTeamId = null;
-                renderTeams();
-                syncLoginStatus();
-                foutmelding.textContent = "Inloggen mislukt of verlopen. Vul opnieuw e-mail en wachtwoord in.";
-                return;
-            }
-            foutmelding.textContent = "Team verwijderen is mislukt.";
-        }
-    }
-    window.loginMetUserToken = loginMetUserToken;
-    window.loginMetGuestToken = loginMetGuestToken;
-    window.uitloggenUserToken = uitloggenUserToken;
-    window.startNieuwTeam = startNieuwTeam;
-    window.annuleerNieuwTeam = annuleerNieuwTeam;
-    window.maakTeamAan = maakTeamAan;
-    window.startBewerken = startBewerken;
-    window.annuleerBewerken = annuleerBewerken;
-    window.slaTeamOp = slaTeamOp;
-    window.verwijderTeam = verwijderTeam;
-</script>
+        });
 
+        // toont de juiste login weergave
+        const updateLoginUi = () => {
+            const logged = hasCrud();
+            $("loginVelden").style.display = logged ? "none" : "inline";
+            $("ingelogdeNaam").style.display = logged ? "inline" : "none";
+            $("logoutKnop").style.display = logged ? "inline-block" : "none";
+            $("ingelogdeNaam").textContent = logged
+                ? `Ingelogd als: ${localStorage.getItem(keys.userName) || "User"}`
+                : "";
+
+            $("loginStatus").style.color = logged ? "green" : "#333";
+            $("loginStatus").textContent = !token()
+                ? "Niet ingelogd."
+                : logged
+                    ? "User token met CRUD actief."
+                    : "Gast token actief (alleen lezen).";
+        };
+
+        // maakt automatisch een gast token als nodig
+        const ensureReadToken = async () => {
+            if (token()) return;
+            const res = await axios.post(endpoints.guest, {}, { headers: { Accept: "application/json" } });
+            saveAuth(res.data.token, res.data.abilities || ["read"]);
+        };
+
+        // checkt of CRUD beschikbaar is
+        const requireCrud = () => {
+            if (!hasCrud()) throw new Error("Log eerst in met een user token met CRUD-rechten.");
+        };
+
+        // rij in edit modus
+        const rowEdit = (t) => `
+            <tr>
+                <td><input id="edit-name-${t.id}" value="${t.name ?? ""}"></td>
+                <td><input id="edit-base-${t.id}" value="${t.base_country ?? ""}"></td>
+                <td><input id="edit-principal-${t.id}" value="${t.team_principal ?? ""}"></td>
+                <td class="actions">
+                    <button onclick="saveTeam(${t.id})">Opslaan</button>
+                    <button onclick="deleteTeam(${t.id})">Verwijder</button>
+                    <button onclick="cancelEdit()">Annuleer</button>
+                </td>
+            </tr>`;
+
+        // rij voor nieuw team
+        const rowNew = () => `
+            <tr>
+                <td><input id="new-name"></td>
+                <td><input id="new-base"></td>
+                <td><input id="new-principal"></td>
+                <td class="actions">
+                    <button onclick="createTeam()">Aanmaken</button>
+                    <button onclick="cancelNew()">Annuleer</button>
+                </td>
+            </tr>`;
+
+        // normale leesweergave van een team
+        const rowView = (t) => `
+            <tr>
+                <td>${t.name ?? ""}</td>
+                <td>${t.base_country ?? ""}</td>
+                <td>${t.team_principal ?? ""}</td>
+                <td class="actions">${hasCrud() ? `<button onclick="startEdit(${t.id})">Wijzig</button>` : ""}</td>
+            </tr>`;
+
+        // rendert alle rijen in de tabel
+        const render = () => {
+            const rows = [];
+            if (hasCrud() && nieuwModus) rows.push(rowNew());
+            teams.forEach((t) => rows.push(hasCrud() && t.id === editId ? rowEdit(t) : rowView(t)));
+            $("tabelInhoud").innerHTML = rows.join("");
+            updateLoginUi();
+        };
+
+        // haalt teams op uit de API
+        const loadTeams = async () => {
+            try {
+                await ensureReadToken();
+                const res = await axios.get(endpoints.teams, headers());
+                teams = res.data;
+                editId = null;
+                msg();
+                render();
+            } catch (e) {
+                if (e.response?.status === 401) clearAuth();
+                msg("Kon teams niet laden. Controleer of de API draait op http://localhost:8000.");
+                updateLoginUi();
+            }
+        };
+
+        // wrapper voor acties die CRUD token nodig hebben
+        const withCrud = async (fn) => {
+            try {
+                requireCrud();
+                await fn();
+            } catch (e) {
+                if (e.response?.status === 401) {
+                    clearAuth();
+                    editId = null;
+                    nieuwModus = false;
+                    render();
+                    msg("Inloggen verlopen. Log opnieuw in.");
+                    return;
+                }
+                if (e.response?.status === 422) {
+                    msg("Validatie mislukt. Controleer je invoer.");
+                    return;
+                }
+                msg(e.message || "Actie mislukt.");
+            }
+        };
+
+        // user login
+        async function loginUser() {
+            const email = $("crudEmail").value.trim();
+            const password = $("crudWachtwoord").value;
+            if (!email || !password) return msg("Vul e-mail en wachtwoord in.");
+            try {
+                const res = await axios.post(endpoints.login, { email, password }, { headers: { Accept: "application/json" } });
+                saveAuth(res.data.token, res.data.abilities || [], res.data.user?.name || "");
+                msg();
+                render();
+            } catch {
+                clearAuth();
+                msg("Inloggen mislukt.");
+                render();
+            }
+        }
+
+        // logout en terug naar read-only
+        function logoutUser() {
+            clearAuth();
+            editId = null;
+            nieuwModus = false;
+            loadTeams();
+        }
+
+        // start nieuw team rij
+        function startNieuw() {
+            if (!hasCrud()) return msg("Log eerst in met user token.");
+            editId = null;
+            nieuwModus = true;
+            msg();
+            render();
+        }
+
+        function cancelNew() { nieuwModus = false; msg(); render(); }
+        function startEdit(id) { if (!hasCrud()) return msg("Log eerst in met user token."); nieuwModus = false; editId = id; msg(); render(); }
+        function cancelEdit() { editId = null; msg(); render(); }
+
+        // maakt een nieuw team aan
+        async function createTeam() {
+            await withCrud(async () => {
+                const payload = {
+                    name: $("new-name").value.trim(),
+                    base_country: $("new-base").value.trim() || null,
+                    team_principal: $("new-principal").value.trim() || null,
+                };
+                if (!payload.name) throw new Error("Naam is verplicht.");
+                const res = await axios.post(endpoints.teams, payload, headers());
+                teams.unshift(res.data);
+                nieuwModus = false;
+                msg();
+                render();
+            });
+        }
+
+        // slaat team wijzigingen op
+        async function saveTeam(id) {
+            await withCrud(async () => {
+                const payload = {
+                    name: $(`edit-name-${id}`).value.trim(),
+                    base_country: $(`edit-base-${id}`).value.trim() || null,
+                    team_principal: $(`edit-principal-${id}`).value.trim() || null,
+                };
+                if (!payload.name) throw new Error("Naam is verplicht.");
+                const res = await axios.put(`${endpoints.teams}/${id}`, payload, headers());
+                const i = teams.findIndex((t) => t.id === id);
+                if (i >= 0) teams[i] = res.data;
+                editId = null;
+                msg();
+                render();
+            });
+        }
+
+        // verwijdert een team
+        async function deleteTeam(id) {
+            if (!confirm("Weet je zeker dat je dit team wilt verwijderen?")) return;
+            await withCrud(async () => {
+                await axios.delete(`${endpoints.teams}/${id}`, headers());
+                teams = teams.filter((t) => t.id !== id);
+                editId = null;
+                msg();
+                render();
+            });
+        }
+        loadTeams();
+    </script>
+</body>
 </html>
