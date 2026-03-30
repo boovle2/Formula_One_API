@@ -107,7 +107,7 @@
 
             $("loginStatus").style.color = logged ? "green" : "#333";
             $("loginStatus").textContent = !token()
-                ? "Niet ingelogd."
+                ? "inloggen mislukt, probeer opnieuw."
                 : logged
                     ? "User token met CRUD actief."
                     : "Gast token actief (alleen lezen).";
@@ -218,7 +218,6 @@
                 render();
             } catch {
                 clearAuth();
-                msg("Inloggen mislukt.");
                 render();
             }
         }
