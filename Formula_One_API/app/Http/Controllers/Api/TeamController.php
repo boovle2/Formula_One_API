@@ -7,6 +7,7 @@ use App\Models\Team;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\Log;
 
 class TeamController extends Controller
 {
@@ -26,6 +27,8 @@ class TeamController extends Controller
         ]);
 
         $team = Team::create($validated);
+
+        Log::info('Team created', ['team_id' => $team->id]);
 
         return response()->json($team, 201);
     }
@@ -52,14 +55,14 @@ class TeamController extends Controller
         ]);
 
         $team->update($validated);
-
+        Log::info('Team updated', ['team_id' => $team->id]);
         return response()->json($team);
     }
 
     public function destroy(Team $team): JsonResponse
     {
         $team->delete();
-
+        Log::info('Team deleted', ['team_id' => $team->id]);
         return response()->json(status: 204);
     }
 }

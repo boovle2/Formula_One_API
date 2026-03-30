@@ -7,6 +7,7 @@ use App\Models\Driver;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\Log;
 
 class DriverController extends Controller
 {
@@ -29,6 +30,8 @@ class DriverController extends Controller
         ]);
 
         $driver = Driver::create($validated)->load('team');
+
+        Log::info('Driver created', ['driver_id' => $driver->id]);
 
         return response()->json($driver, 201);
     }
@@ -59,12 +62,16 @@ class DriverController extends Controller
 
         $driver->update($validated);
 
+        Log::info('Driver updated', ['driver_id' => $driver->id]);
+
         return response()->json($driver->load('team'));
     }
 
     public function destroy(Driver $driver): JsonResponse
     {
         $driver->delete();
+
+        Log::info('Driver deleted', ['driver_id' => $driver->id]);
 
         return response()->json(status: 204);
     }
