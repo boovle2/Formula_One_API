@@ -75,7 +75,7 @@
             <button type="button" onclick="loginMetUserToken()">Inloggen user token</button>
         </span>
         <span id="ingelogdeNaam" style="display: none; font-weight: 600;"></span>
-        <button type="button" onclick="uitloggenUserToken()">Uitloggen</button>
+        <button type="button" id="logUit" style="display: none" onclick="uitloggenUserToken()">Uitloggen</button>
         <button type="button" onclick="startNieuwTeam()">Nieuw team</button>
     </div>
     <p id="loginStatus" style="color: #333;"></p>
@@ -186,6 +186,7 @@
         syncLoginUi();
     }
     const loginMetUserToken = async () => {
+        logUit.style.display = "inline";
         const email = document.getElementById("crudEmail").value.trim();
         const password = document.getElementById("crudWachtwoord").value;
         const foutmelding = document.getElementById("foutmelding");
@@ -206,6 +207,7 @@
             syncLoginStatus();
             renderTeams();
         } catch (error) {
+            logUit.style.display = "none";
             console.error(error);
             clearAuth();
             editTeamId = null;
@@ -230,6 +232,7 @@
         }
     }
     const uitloggenUserToken = async () => {
+        logUit.style.display = "none";
         crudEmail.value = "";
         crudWachtwoord.value = "";
         clearAuth();
