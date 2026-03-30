@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Formula 1 API Frontend</title>
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+
+    <style>
+        div,
+        footer {
+            margin-top: 20px;
+        }
+
+        body {
+            width: 50%;
+            max-width: 500px;
+            margin: auto;
+            margin-top: 50px;
+        }
+
+        th,
+        td {
+            text-align: left;
+            padding-right: 10px;
+            white-space: nowrap;
+        }
+
+        th:last-child,
+        td:last-child {
+            text-align: right;
+            padding-right: 0;
+        }
+
+        button {
+            margin-left: 6px;
+        }
+
+        input {
+            max-width: 150px;
+        }
+    </style>
+</head>
+
+<body onload="laadTeams()">
+    <h1>Teams api</h1>
+    <div>
+        <label for="crudEmail">E-mail</label>
+        <input id="crudEmail" type="email" placeholder="jij@mail.com">
+        <label for="crudWachtwoord">Wachtwoord</label>
+        <input id="crudWachtwoord" type="password" placeholder="wachtwoord">
+    </div>
+    <table>
+        <tr>
+            <th>Naam</th>
+            <th>base country</th>
+            <th>team principal</th>
+            <th></th>
+        </tr>
+        <tbody id="tabelInhoud"></tbody>
+    </table>
+    <p id="foutmelding" style="color: red;"></p>
+</body>
+<script>
+    "use strict";
+    const apibasis = "http://localhost:8000/api";
+    const apiTeams = apibasis + "/teams";
+    const apiGuestToken = apibasis + "/tokens/guest";
+    const apiLogin = apibasis + "/login";
+
+    let teams = [];
+    let editTeamId = null;
+    let crudToken = null;
+
+    const getAuthHeaders = async () => {
+        const tokenResponse = await axios.post(apiGuestToken);
+        const token = tokenResponse.data.token;
+
+        return {
+            headers: {
+                Authorization: `Bearer ${token}`,
+                Accept: "application/json",
+            },
+        };
+    }
+
+    const getCrudHeaders = async () => {
+        if (crudToken) {
+            return {
+                headers: {
+                    Authorization: `Bearer ${crudToken}`,
+                    Accept: "application/json",
+                },
+            };
+        }
+
+        const email = document.getElementById("crudEmail").value.trim();
+        const password = document.getElementById("crudWachtwoord").value;
+
+        if (!email || !password) {
+            throw new Error("Vul eerst e-mail en wachtwoord in om te bewerken of verwijderen.");
+        }
+
+        const loginResponse = await axios.post(apiLogin, { email, password });
+        crudToken = loginResponse.data.token;
+
+        return {
+            headers: {
+                Authorization: `Bearer ${crudToken}`,
+                Accept: "application/json",
+            },
+        };
+    }
+
+    const maakTeamRij = (team) => {
+        if (team.id === editTeamId) {
+            return `
+                <tr>
+                    <td><input id="edit-name-${team.id}" value="${team.name ?? ""}"></td>
+                    <td><input id="edit-base-${team.id}" value="${team.base_country ?? ""}"></td>
+                    <td><input id="edit-principal-${team.id}" value="${team.team_principal ?? ""}"></td>
+                    <td>
+                        <button onclick="slaTeamOp(${team.id})">Opslaan</button>
+                        <button onclick="verwijderTeam(${team.id})">Verwijder</button>
+                        <button onclick="annuleerBewerken()">Annuleer</button>
+                    </td>
+                </tr>`;
+        }
+
+        return `
+            <tr>
+                <td>${team.name ?? ""}</td>
+                <td>${team.base_country ?? ""}</td>
+                <td>${team.team_principal ?? ""}</td>
+                <td><button onclick="startBewerken(${team.id})">Wijzig</button></td>
+            </tr>`;
+    }
+
+    const renderTeams = () => {
+        const tabelInhoud = document.getElementById("tabelInhoud");
+        tabelInhoud.innerHTML = teams.map(maakTeamRij).join("");
+    }
+
+    const laadTeams = async () => {
+        const tabelInhoud = document.getElementById("tabelInhoud");
+        const foutmelding = document.getElementById("foutmelding");
+
+        try {
+            const authConfig = await getAuthHeaders();
+            const response = await axios.get(apiTeams, authConfig);
+            const json = response.data;
+
+            teams = json;
+            editTeamId = null;
+            tabelInhoud.innerHTML = "";
+            foutmelding.textContent = "";
+
+            renderTeams();
+        } catch (error) {
+            console.error(error);
+            foutmelding.textContent = "Kon teams niet laden. Controleer of de API draait op http://localhost:8000.";
+        }
+    }
+
+    const startBewerken = (id) => {
+        editTeamId = id;
+        document.getElementById("foutmelding").textContent = "";
+        renderTeams();
+    }
+
+    const annuleerBewerken = () => {
+        editTeamId = null;
+        document.getElementById("foutmelding").textContent = "";
+        renderTeams();
+    }
+
+    const slaTeamOp = async (id) => {
+        const foutmelding = document.getElementById("foutmelding");
+
+        try {
+            const payload = {
+                name: document.getElementById(`edit-name-${id}`).value.trim(),
+                base_country: document.getElementById(`edit-base-${id}`).value.trim() || null,
+                team_principal: document.getElementById(`edit-principal-${id}`).value.trim() || null,
+            };
+
+            if (!payload.name) {
+                throw new Error("Naam is verplicht.");
+            }
+
+            const crudConfig = await getCrudHeaders();
+            const response = await axios.put(`${apiTeams}/${id}`, payload, crudConfig);
+            const index = teams.findIndex(team => team.id === id);
+
+            if (index >= 0) {
+                teams[index] = response.data;
+            }
+
+            editTeamId = null;
+            foutmelding.textContent = "";
+            renderTeams();
+        } catch (error) {
+            console.error(error);
+            if (error.response?.status === 422) {
+                foutmelding.textContent = "Validatie mislukt. Controleer de invoer.";
+                return;
+            }
+            if (error.response?.status === 401) {
+                crudToken = null;
+                foutmelding.textContent = "Inloggen mislukt of verlopen. Vul opnieuw e-mail en wachtwoord in.";
+                return;
+            }
+            foutmelding.textContent = error.message || "Team opslaan is mislukt.";
+        }
+    }
+
+    const verwijderTeam = async (id) => {
+        const foutmelding = document.getElementById("foutmelding");
+
+        if (!confirm("Weet je zeker dat je dit team wilt verwijderen?")) {
+            return;
+        }
+
+        try {
+            const crudConfig = await getCrudHeaders();
+            await axios.delete(`${apiTeams}/${id}`, crudConfig);
+
+            teams = teams.filter(team => team.id !== id);
+            editTeamId = null;
+            foutmelding.textContent = "";
+            renderTeams();
+        } catch (error) {
+            console.error(error);
+            if (error.response?.status === 401) {
+                crudToken = null;
+                foutmelding.textContent = "Inloggen mislukt of verlopen. Vul opnieuw e-mail en wachtwoord in.";
+                return;
+            }
+            foutmelding.textContent = "Team verwijderen is mislukt.";
+        }
+    }
+
+    window.startBewerken = startBewerken;
+    window.annuleerBewerken = annuleerBewerken;
+    window.slaTeamOp = slaTeamOp;
+    window.verwijderTeam = verwijderTeam;
+</script>
+
+</html>
