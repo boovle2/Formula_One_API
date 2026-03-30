@@ -21,7 +21,7 @@ class Driver extends Model
     public $timestamps = false;
 
     protected $casts = [
-        'date_of_birth' => 'date',
+        'date_of_birth' => 'date:Y-m-d',
     ];
 
     public function team(): BelongsTo

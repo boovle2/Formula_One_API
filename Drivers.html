@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Formula 1 API Frontend</title>
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>`
+
+    <style>
+        div,
+		footer {
+			margin-top: 20px;
+		}
+
+		body {
+			width: 50%;
+			max-width: 500px;
+			margin: auto;
+			margin-top: 50px;
+		}
+
+		th,
+		td {
+			text-align: left;
+			padding-right: 10px;
+			white-space: nowrap;
+		}
+
+		th:last-child,
+		td:last-child {
+			text-align: right;
+			padding-right: 0;
+		}
+    </style>
+</head>
+<body onload="laadDrivers()">
+	<h1>Drivers api</h1>
+	<table>
+		<tr>
+			<th>First Name</th>
+			<th>Last Name</th>
+            <th>Number</th>
+            <th>Nationality</th>
+            <th>Date of Birth</th>
+			<th>Team</th>
+			<th></th>
+		</tr>
+		<tbody id="tabelInhoud"></tbody>
+	</table>
+	<p id="foutmelding" style="color: red;"></p>
+</body>
+<script>
+    "use strict";
+    const apibasis = "http://localhost:8000/api";
+    const apiDrivers = apibasis + "/drivers";
+    const apiGuestToken = apibasis + "/tokens/guest";
+
+    const getAuthHeaders = async () => {
+        const tokenResponse = await axios.post(apiGuestToken);
+        const token = tokenResponse.data.token;
+
+        return {
+            headers: {
+                Authorization: `Bearer ${token}`,
+                Accept: "application/json",
+            },
+        };
+    }
+
+    const laadDrivers = async () => {
+        const tabelInhoud = document.getElementById("tabelInhoud");
+        const foutmelding = document.getElementById("foutmelding");
+
+        try {
+            const authConfig = await getAuthHeaders();
+            const response = await axios.get(apiDrivers, authConfig);
+            const json = response.data;
+
+            tabelInhoud.innerHTML = "";
+            foutmelding.textContent = "";
+
+            json.forEach(el => {
+                tabelInhoud.innerHTML += `
+                    <tr>
+                        <td>${el.first_name ?? ""}</td>
+                        <td>${el.last_name ?? ""}</td>
+                        <td>${el.number ?? ""}</td>
+                        <td>${el.nationality ?? ""}</td>
+                        <td>${el.date_of_birth ?? ""}</td>
+                        <td>${el.team?.name ?? (el.team_id ?? "")}</td>
+                        <td></td>
+                    </tr>`;
+            });
+        } catch (error) {
+            console.error(error);
+            foutmelding.textContent = "Kon drivers niet laden. Controleer of de API draait op http://localhost:8000.";
+        }
+    }
+</script>
+</html>
